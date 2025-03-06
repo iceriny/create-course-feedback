@@ -1,4 +1,4 @@
-import { FC, useRef, useState } from "react";
+import { FC, useCallback, useRef, useState } from "react";
 
 import { CloseOutlined, FileTextFilled } from "@ant-design/icons";
 import {
@@ -20,11 +20,40 @@ import dayjs from "dayjs";
 let template = "{{courseFeedback}}";
 
 const { RangePicker } = DatePicker;
+
 const Page: FC = () => {
     const [form] = Form.useForm();
     const [students, setStudents] = useState<string[]>([]);
     const studentsContentRef = useRef<Map<string, string>>(new Map());
 
+    const handleSubmit = useCallback(() => {
+        const data = form.getFieldsValue();
+        data.get = (key: string) => {
+            return data[key];
+        };
+        const className = data.get("class-name");
+        const courseName = data.get("course-name") as string;
+        const courseContents = data
+            .get("course-contents")
+            .map((item: { item: string }) => `- ${item.item}\n`) as string[];
+        const courseObjectives = data
+            .get("course-objectives")
+            .map((item: { item: string }) => `- ${item.item}\n`) as string[];
+        const time = data.get("course-time") as [dayjs.Dayjs, dayjs.Dayjs];
+        template =
+            `**课程名称:** 《${courseName}》\n` +
+            `**授课时间:** @${time[0].format(
+                "YYYY[年] MM[月]DD[日] HH:mm"
+            )} -> ${time[1].format("HH:mm")}\n` +
+            `**课程内容概览:**\n${courseContents.join("")}\n` +
+            `**教学目标:**\n${courseObjectives.join("")}\n` +
+            "**课堂表现:**\n" +
+            "{{courseFeedback}}\n\n" +
+            "哆啦人工智能小栈\n" +
+            `${time[0].format("YYYY[年] MM[月]DD[日]")}`;
+        // TODO: 数据过滤!
+        localStorage.setItem(className, data);
+    }, [form]);
     return (
         <>
             <Form
@@ -34,6 +63,7 @@ const Page: FC = () => {
                 name="dynamic_form_complex"
                 style={{ maxWidth: 600 }}
                 autoComplete="off"
+                onFinish={handleSubmit}
                 initialValues={{ items: [{}] }}
             >
                 <div
@@ -48,11 +78,26 @@ const Page: FC = () => {
                         title={`课程信息`}
                         // TODO: 完成卡片折叠 extra={}
                     >
-                        <Form.Item label="课程名称" name="course-name">
+                        <Form.Item
+                            label="班级名"
+                            name="class-name"
+                            rules={[{ required: true }]}
+                        >
+                            <Input />
+                        </Form.Item>
+                        <Form.Item
+                            label="课程名称"
+                            name="course-name"
+                            rules={[{ required: true }]}
+                        >
                             <Input />
                         </Form.Item>
 
-                        <Form.Item label="授课时间" name="course-time">
+                        <Form.Item
+                            label="授课时间"
+                            name="course-time"
+                            rules={[{ required: true }]}
+                        >
                             <RangePicker
                                 showTime={{ format: "HH:mm" }}
                                 format="YYYY-MM-DD HH:mm"
@@ -66,8 +111,26 @@ const Page: FC = () => {
                             />
                         </Form.Item>
                         <Form.Item label="课程内容">
-                            <Form.List name="course-contents">
-                                {(fields, opt) => (
+                            <Form.List
+                                name="course-contents"
+                                rules={[
+                                    {
+                                        validator: async (_, contents) => {
+                                            if (
+                                                !contents ||
+                                                contents.length < 1
+                                            ) {
+                                                return Promise.reject(
+                                                    new Error(
+                                                        "至少需要有一个课程内容"
+                                                    )
+                                                );
+                                            }
+                                        },
+                                    },
+                                ]}
+                            >
+                                {(fields, opt, { errors }) => (
                                     <div
                                         style={{
                                             display: "flex",
@@ -83,6 +146,7 @@ const Page: FC = () => {
                                                         subField.name,
                                                         "item",
                                                     ]}
+                                                    rules={[{ required: true }]}
                                                 >
                                                     <Input
                                                         style={{ width: 350 }}
@@ -105,13 +169,32 @@ const Page: FC = () => {
                                         >
                                             + 添加课程内容
                                         </Button>
+                                        <Form.ErrorList errors={errors} />
                                     </div>
                                 )}
                             </Form.List>
                         </Form.Item>
                         <Form.Item label="教学目标">
-                            <Form.List name="course-objectives">
-                                {(fields, opt) => (
+                            <Form.List
+                                name="course-objectives"
+                                rules={[
+                                    {
+                                        validator: async (_, objectives) => {
+                                            if (
+                                                !objectives ||
+                                                objectives.length < 1
+                                            ) {
+                                                return Promise.reject(
+                                                    new Error(
+                                                        "至少需要有一个课程目标"
+                                                    )
+                                                );
+                                            }
+                                        },
+                                    },
+                                ]}
+                            >
+                                {(fields, opt, { errors }) => (
                                     <div
                                         style={{
                                             display: "flex",
@@ -127,6 +210,7 @@ const Page: FC = () => {
                                                         subField.name,
                                                         "item",
                                                     ]}
+                                                    rules={[{ required: true }]}
                                                 >
                                                     <Input
                                                         style={{ width: 350 }}
@@ -149,6 +233,7 @@ const Page: FC = () => {
                                         >
                                             + 添加教学目标
                                         </Button>
+                                        <Form.ErrorList errors={errors} />
                                     </div>
                                 )}
                             </Form.List>
@@ -157,48 +242,16 @@ const Page: FC = () => {
                             <Button
                                 type="primary"
                                 htmlType="submit"
-                                onClick={(e) => {
-                                    console.log(e);
-                                    console.log(form.getFieldsValue());
-                                    const data = form.getFieldsValue();
-                                    data.get = (key: string) => {
-                                        return data[key];
-                                    };
-                                    const courseName = data.get(
-                                        "course-name"
-                                    ) as string;
-                                    const courseContents = data
-                                        .get("course-contents")
-                                        .map(
-                                            (item: { item: string }) =>
-                                                `- ${item.item}\n`
-                                        ) as string[];
-                                    const courseObjectives = data
-                                        .get("course-objectives")
-                                        .map(
-                                            (item: { item: string }) =>
-                                                `- ${item.item}\n`
-                                        ) as string[];
-                                    const time = data.get("course-time") as [
-                                        dayjs.Dayjs,
-                                        dayjs.Dayjs
-                                    ];
-                                    template =
-                                        `**课程名称:** ${courseName}\n` +
-                                        `**授课时间:** @${time[0].format(
-                                            "YYYY[年] MM[月]DD[日] HH:mm"
-                                        )} -> ${time[1].format("HH:mm")}\n` +
-                                        `**课程内容概览:**\n${courseContents}\n` +
-                                        `**教学目标:**\n${courseObjectives}\n` +
-                                        "**课堂表现:**\n" +
-                                        "{{courseFeedback}}\n\n" +
-                                        "哆啦人工智能小栈\n" +
-                                        `${time[0].format(
-                                            "YYYY[年] MM[月]DD[日]"
-                                        )}`;
-                                }}
+                                // onClick={handleSubmit}
                             >
                                 提交
+                            </Button>
+                            <Button
+                                onClick={() => {
+                                    // form.setFieldsValue()
+                                }}
+                            >
+                                导入
                             </Button>
                         </Form.Item>
                     </Card>

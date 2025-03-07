@@ -9,6 +9,8 @@ interface NumberListInputProps {
     values_?: string[];
     onChange?: (value: string[]) => void;
     onClear?: () => void;
+    onClick?: (index: number, value?: string) => void;
+    style?: React.CSSProperties;
 }
 
 function getSingleNumberInputComponent(
@@ -35,9 +37,14 @@ const Main: React.FC<NumberListInputProps> = ({
     values_,
     onChange,
     onClear,
+    onClick,
+    style,
 }) => {
     const [values, setValues] = useState<string[]>(values_ || []);
-    // values = values || [];
+    useEffect(() => {
+        if (values_ === undefined) return;
+        setValues(values_);
+    }, [values_]);
 
     const [length, setLength] = useState<number>(2);
 
@@ -69,17 +76,17 @@ const Main: React.FC<NumberListInputProps> = ({
     };
     useEffect(() => {
         const newLength = values.length + 1;
-        console.log("new length", newLength, " || Old Length: ", values.length);
         if (length !== newLength) setLength(newLength);
     }, [values, length]);
 
     return (
-        <Flex gap={10} align="center" wrap>
+        <Flex gap={10} align="center" wrap style={style}>
             {getSingleNumberInputComponent(
                 length,
                 {
                     onPressEnter: handlePressEnter,
                     onChange: handleChange,
+                    onClick,
                     onBackspace,
                 },
                 values

@@ -9,6 +9,7 @@ export interface SingleNumberInputProps {
     onChange?: (value: string, index: number) => void;
     onPressEnter?: (value: string, index: number) => void;
     onBackspace?: (index: number) => void;
+    onClick?: (index: number, value?: string) => void;
 }
 const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
     defaultValue,
@@ -18,6 +19,7 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
     onChange,
     onPressEnter,
     onBackspace,
+    onClick,
 }) => {
     const handleChange: InputStringProps["onChange"] = (value) => {
         const newValue = value.target.value;
@@ -44,7 +46,16 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
             id={id}
             defaultValue={defaultValue}
             value={value}
-            addonBefore={`${index + 1}`}
+            addonBefore={
+                <div
+                    style={{ padding: "0 10px" }}
+                    onClick={() => {
+                        onClick?.(index, value);
+                    }}
+                >
+                    {index + 1}
+                </div>
+            }
             type="text"
             size="small"
             placeholder="学生姓名"

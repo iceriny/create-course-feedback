@@ -5,6 +5,7 @@ import {
     Button,
     Card,
     DatePicker,
+    Flex,
     FloatButton,
     Form,
     Input,
@@ -13,6 +14,7 @@ import {
 import StringListInput from "./StringListInput";
 
 import dayjs from "dayjs";
+import type { JointContent } from "antd/es/message/interface";
 // import { GetProps } from "antd/lib";
 
 // type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
@@ -21,10 +23,23 @@ let template = "{{courseFeedback}}";
 
 const { RangePicker } = DatePicker;
 
-const Page: FC = () => {
+interface PageProps {
+    sendMessage: (
+        content: JointContent,
+        duration?: number | VoidFunction,
+        onClose?: VoidFunction
+    ) => void;
+    sendWarning: (
+        content: JointContent,
+        duration?: number | VoidFunction,
+        onClose?: VoidFunction
+    ) => void;
+}
+const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [form] = Form.useForm();
     const [students, setStudents] = useState<string[]>([]);
     const studentsContentRef = useRef<Map<string, string>>(new Map());
+    const isFinishedRef = useRef(false);
 
     const handleSubmit = useCallback(() => {
         const data = form.getFieldsValue();
@@ -51,231 +66,251 @@ const Page: FC = () => {
             "{{courseFeedback}}\n\n" +
             "哆啦人工智能小栈\n" +
             `${time[0].format("YYYY[年] MM[月]DD[日]")}`;
-        // TODO: 数据过滤!
-        localStorage.setItem(className, data);
+        // 数据过滤!
+        const saveData = {
+            courseName,
+            time: {
+                first: time[0].format("YYYY-MM-DD HH:mm"),
+                last: time[1].format("YYYY-MM-DD HH:mm"),
+            },
+        };
+        localStorage.setItem(className, JSON.stringify(saveData));
+        isFinishedRef.current = true;
     }, [form]);
+    const handleImport = useCallback(() => {
+        const data = localStorage.getItem(form.getFieldValue("class-name"));
+        if (data) {
+            const dataObj = JSON.parse(data);
+            form.setFieldsValue({
+                "course-name": dataObj.courseName,
+                "course-time": [
+                    dayjs(dataObj.time.first),
+                    dayjs(dataObj.time.last),
+                ],
+            });
+        } else {
+            sendMessage("未找到该班级的数据, 请检查班级名是否正确.");
+        }
+        const students = localStorage.getItem(
+            form.getFieldValue("class-name") + "_std"
+        );
+        if (students) {
+            setStudents(JSON.parse(students));
+        }
+    }, [form, sendMessage]);
     return (
-        <>
+        <Flex vertical gap={20} justify="center" align="center">
             <Form
                 labelCol={{ span: 6 }}
                 wrapperCol={{ span: 18 }}
                 form={form}
-                name="dynamic_form_complex"
-                style={{ maxWidth: 600 }}
+                name="course-info"
                 autoComplete="off"
                 onFinish={handleSubmit}
                 initialValues={{ items: [{}] }}
             >
-                <div
-                    style={{
-                        display: "flex",
-                        rowGap: 16,
-                        flexDirection: "column",
-                    }}
+                <Card
+                    size="small"
+                    title={`课程信息`}
+                    style={{ minWidth: "800px" }}
+                    actions={[
+                        <Button type="link" htmlType="submit">
+                            提交
+                        </Button>,
+                        <Button type="link" onClick={handleImport}>
+                            导入
+                        </Button>,
+                    ]}
+                    // TODO: 完成卡片折叠 extra={}
                 >
-                    <Card
-                        size="small"
-                        title={`课程信息`}
-                        // TODO: 完成卡片折叠 extra={}
+                    <Form.Item
+                        label="班级名"
+                        name="class-name"
+                        rules={[{ required: true }]}
                     >
-                        <Form.Item
-                            label="班级名"
-                            name="class-name"
-                            rules={[{ required: true }]}
-                        >
-                            <Input />
-                        </Form.Item>
-                        <Form.Item
-                            label="课程名称"
-                            name="course-name"
-                            rules={[{ required: true }]}
-                        >
-                            <Input />
-                        </Form.Item>
+                        <Input />
+                    </Form.Item>
+                    <Form.Item
+                        label="课程名称"
+                        name="course-name"
+                        rules={[{ required: true }]}
+                    >
+                        <Input />
+                    </Form.Item>
 
-                        <Form.Item
-                            label="授课时间"
-                            name="course-time"
-                            rules={[{ required: true }]}
+                    <Form.Item
+                        label="授课时间"
+                        name="course-time"
+                        rules={[{ required: true }]}
+                    >
+                        <RangePicker
+                            showTime={{ format: "HH:mm" }}
+                            format="YYYY-MM-DD HH:mm"
+                            onChange={(value, dateString) => {
+                                console.log("Selected Time: ", value);
+                                console.log(
+                                    "Formatted Selected Time: ",
+                                    dateString
+                                );
+                            }}
+                        />
+                    </Form.Item>
+                    <Form.Item label="课程内容">
+                        <Form.List
+                            name="course-contents"
+                            rules={[
+                                {
+                                    validator: async (_, contents) => {
+                                        if (!contents || contents.length < 1) {
+                                            return Promise.reject(
+                                                new Error(
+                                                    "至少需要有一个课程内容"
+                                                )
+                                            );
+                                        }
+                                    },
+                                },
+                            ]}
                         >
-                            <RangePicker
-                                showTime={{ format: "HH:mm" }}
-                                format="YYYY-MM-DD HH:mm"
-                                onChange={(value, dateString) => {
-                                    console.log("Selected Time: ", value);
-                                    console.log(
-                                        "Formatted Selected Time: ",
-                                        dateString
-                                    );
-                                }}
-                            />
-                        </Form.Item>
-                        <Form.Item label="课程内容">
-                            <Form.List
-                                name="course-contents"
-                                rules={[
-                                    {
-                                        validator: async (_, contents) => {
-                                            if (
-                                                !contents ||
-                                                contents.length < 1
-                                            ) {
-                                                return Promise.reject(
-                                                    new Error(
-                                                        "至少需要有一个课程内容"
-                                                    )
-                                                );
-                                            }
-                                        },
-                                    },
-                                ]}
-                            >
-                                {(fields, opt, { errors }) => (
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            rowGap: 16,
-                                        }}
-                                    >
-                                        {fields.map((subField) => (
-                                            <Space key={subField.key}>
-                                                <Form.Item
-                                                    noStyle
-                                                    name={[
-                                                        subField.name,
-                                                        "item",
-                                                    ]}
-                                                    rules={[{ required: true }]}
-                                                >
-                                                    <Input
-                                                        style={{ width: 350 }}
-                                                        placeholder="填写课程内容"
-                                                    />
-                                                </Form.Item>
-                                                <CloseOutlined
-                                                    onClick={() => {
-                                                        opt.remove(
-                                                            subField.name
-                                                        );
-                                                    }}
+                            {(fields, opt, { errors }) => (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        rowGap: 16,
+                                    }}
+                                >
+                                    {fields.map((subField) => (
+                                        <Space key={subField.key}>
+                                            <Form.Item
+                                                noStyle
+                                                name={[subField.name, "item"]}
+                                                rules={[{ required: true }]}
+                                            >
+                                                <Input
+                                                    style={{ width: 350 }}
+                                                    placeholder="填写课程内容"
                                                 />
-                                            </Space>
-                                        ))}
-                                        <Button
-                                            type="dashed"
-                                            onClick={() => opt.add()}
-                                            block
-                                        >
-                                            + 添加课程内容
-                                        </Button>
-                                        <Form.ErrorList errors={errors} />
-                                    </div>
-                                )}
-                            </Form.List>
-                        </Form.Item>
-                        <Form.Item label="教学目标">
-                            <Form.List
-                                name="course-objectives"
-                                rules={[
-                                    {
-                                        validator: async (_, objectives) => {
-                                            if (
-                                                !objectives ||
-                                                objectives.length < 1
-                                            ) {
-                                                return Promise.reject(
-                                                    new Error(
-                                                        "至少需要有一个课程目标"
-                                                    )
-                                                );
-                                            }
-                                        },
-                                    },
-                                ]}
-                            >
-                                {(fields, opt, { errors }) => (
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            rowGap: 16,
-                                        }}
+                                            </Form.Item>
+                                            <CloseOutlined
+                                                onClick={() => {
+                                                    opt.remove(subField.name);
+                                                }}
+                                            />
+                                        </Space>
+                                    ))}
+                                    <Button
+                                        type="dashed"
+                                        onClick={() => opt.add()}
+                                        block
                                     >
-                                        {fields.map((subField) => (
-                                            <Space key={subField.key}>
-                                                <Form.Item
-                                                    noStyle
-                                                    name={[
-                                                        subField.name,
-                                                        "item",
-                                                    ]}
-                                                    rules={[{ required: true }]}
-                                                >
-                                                    <Input
-                                                        style={{ width: 350 }}
-                                                        placeholder="填写教学目标"
-                                                    />
-                                                </Form.Item>
-                                                <CloseOutlined
-                                                    onClick={() => {
-                                                        opt.remove(
-                                                            subField.name
-                                                        );
-                                                    }}
+                                        + 添加课程内容
+                                    </Button>
+                                    <Form.ErrorList errors={errors} />
+                                </div>
+                            )}
+                        </Form.List>
+                    </Form.Item>
+                    <Form.Item label="教学目标">
+                        <Form.List
+                            name="course-objectives"
+                            rules={[
+                                {
+                                    validator: async (_, objectives) => {
+                                        if (
+                                            !objectives ||
+                                            objectives.length < 1
+                                        ) {
+                                            return Promise.reject(
+                                                new Error(
+                                                    "至少需要有一个课程目标"
+                                                )
+                                            );
+                                        }
+                                    },
+                                },
+                            ]}
+                        >
+                            {(fields, opt, { errors }) => (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        rowGap: 16,
+                                    }}
+                                >
+                                    {fields.map((subField) => (
+                                        <Space key={subField.key}>
+                                            <Form.Item
+                                                noStyle
+                                                name={[subField.name, "item"]}
+                                                rules={[{ required: true }]}
+                                            >
+                                                <Input
+                                                    style={{ width: 350 }}
+                                                    placeholder="填写教学目标"
                                                 />
-                                            </Space>
-                                        ))}
-                                        <Button
-                                            type="dashed"
-                                            onClick={() => opt.add()}
-                                            block
-                                        >
-                                            + 添加教学目标
-                                        </Button>
-                                        <Form.ErrorList errors={errors} />
-                                    </div>
-                                )}
-                            </Form.List>
-                        </Form.Item>
-                        <Form.Item>
-                            <Button
-                                type="primary"
-                                htmlType="submit"
-                                // onClick={handleSubmit}
-                            >
-                                提交
-                            </Button>
-                            <Button
-                                onClick={() => {
-                                    // form.setFieldsValue()
-                                }}
-                            >
-                                导入
-                            </Button>
-                        </Form.Item>
-                    </Card>
-                </div>
+                                            </Form.Item>
+                                            <CloseOutlined
+                                                onClick={() => {
+                                                    opt.remove(subField.name);
+                                                }}
+                                            />
+                                        </Space>
+                                    ))}
+                                    <Button
+                                        type="dashed"
+                                        onClick={() => opt.add()}
+                                        block
+                                    >
+                                        + 添加教学目标
+                                    </Button>
+                                    <Form.ErrorList errors={errors} />
+                                </div>
+                            )}
+                        </Form.List>
+                    </Form.Item>
+                </Card>
             </Form>
             <StringListInput
+                style={{ width: "800px" }}
+                values_={students}
                 onChange={(values) => {
+                    const className = form.getFieldValue("class-name");
+                    if (!className) return;
                     for (const value of values) {
                         if (!studentsContentRef.current.has(value)) {
                             studentsContentRef.current.set(value, "");
                         }
                     }
                     setStudents(values);
+                    localStorage.setItem(
+                        `${className}_std`,
+                        JSON.stringify(values)
+                    );
                 }}
                 onClear={() => {
                     studentsContentRef.current.clear();
                     setStudents([]);
                 }}
+                onClick={() => {}}
             />
             {students.map((student, index) => (
-                <Card key={index} title={student}>
+                <Card
+                    style={{ minWidth: "800px" }}
+                    key={index}
+                    size="small"
+                    title={
+                        <span>
+                            <span style={{ marginRight: "20px" }}>{index}</span>
+                            {student}
+                        </span>
+                    }
+                >
                     <Input.TextArea
                         size="small"
                         title="填写学生课堂表现关键词"
+                        autoSize={{ minRows: 1, maxRows: 12 }}
                         defaultValue={studentsContentRef.current.get(student)}
                         onChange={(e) => {
                             studentsContentRef.current.set(
@@ -289,9 +324,12 @@ const Page: FC = () => {
             <FloatButton
                 icon={<FileTextFilled />}
                 type="primary"
-                tooltip="导出"
+                tooltip="导出内容到剪切板."
                 style={{ insetInlineEnd: 24 }}
                 onClick={() => {
+                    if (!isFinishedRef.current) {
+                        sendWarning("内容可能不完整, 或未点击提交按钮.");
+                    }
                     let result = "";
                     for (const student of students) {
                         result += `### ${student}\n`;
@@ -302,9 +340,10 @@ const Page: FC = () => {
                         result += "\n\n---\n";
                     }
                     navigator.clipboard.writeText(result);
+                    sendMessage("已导出到剪切板.");
                 }}
             />
-        </>
+        </Flex>
     );
 };
 export default Page;

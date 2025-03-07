@@ -1,10 +1,16 @@
 import { FC, useCallback, useRef, useState } from "react";
 
-import { CloseOutlined, FileTextFilled } from "@ant-design/icons";
+import {
+    CloseOutlined,
+    EllipsisOutlined,
+    FileTextFilled,
+    ThunderboltOutlined,
+} from "@ant-design/icons";
 import {
     Button,
     Card,
     DatePicker,
+    Drawer,
     Flex,
     FloatButton,
     Form,
@@ -15,11 +21,24 @@ import StringListInput from "./StringListInput";
 
 import dayjs from "dayjs";
 import type { JointContent } from "antd/es/message/interface";
+import getAPI, { API } from "./AI_API";
 // import { GetProps } from "antd/lib";
 
 // type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
 
 let template = "{{courseFeedback}}";
+
+const PROMPT = `## 你是一个编程老师, 主要教小学和初高中的同学学习编程.
+### 现在有一个任务:
+- 需要我提供你基本结构, 具体为课程名,时间, 课程内容, 教学目标,以及课堂表现
+- 其中课堂表现是你唯一要写的内容.
+- 你会根据提供的关键词扩写(大约150字)课堂表现.
+- 在写课堂表现时候, 要指出优点,表明缺点, 并且要注意语气和礼貌.
+- 请记住!!这是给家长提供的课程反馈, 一定要注意到家长的情绪.
+- 禁止出现额外的你自己猜想的\`剧情\`, 不要编写没有明确存在的具体事件, 比如\`某某在xxx最先...\`这样的内容
+- 请用更通用和宏观的语言表述问题,而非展示课堂细节.
+
+## 请仅仅回复你的课程反馈.`;
 
 const { RangePicker } = DatePicker;
 
@@ -40,6 +59,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [students, setStudents] = useState<string[]>([]);
     const studentsContentRef = useRef<Map<string, string>>(new Map());
     const isFinishedRef = useRef(false);
+    const [open, setOpen] = useState(false);
 
     const handleSubmit = useCallback(() => {
         const data = form.getFieldsValue();
@@ -98,252 +118,311 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             setStudents(JSON.parse(students));
         }
     }, [form, sendMessage]);
+    const handleAIOptimize = useCallback(() => {
+        getAPI().sendMessage(
+            (msg) => {
+                console.log(msg);
+            },
+            { content: PROMPT, role: "system" },
+            { content: template, role: "user" },
+            {
+                content: studentsContentRef.current.get("许家豪") ?? "",
+                role: "user",
+            }
+        );
+    }, []);
     return (
-        <Flex vertical gap={20} justify="center" align="center">
-            <Form
-                labelCol={{ span: 6 }}
-                wrapperCol={{ span: 18 }}
-                form={form}
-                name="course-info"
-                autoComplete="off"
-                onFinish={handleSubmit}
-                initialValues={{ items: [{}] }}
+        <>
+            <Drawer
+                title="设置"
+                onClose={() => {
+                    setOpen(false);
+                }}
+                open={open}
             >
-                <Card
-                    size="small"
-                    title={`课程信息`}
-                    style={{ minWidth: "800px" }}
-                    actions={[
-                        <Button type="link" htmlType="submit">
-                            提交
-                        </Button>,
-                        <Button type="link" onClick={handleImport}>
-                            导入
-                        </Button>,
-                    ]}
-                    // TODO: 完成卡片折叠 extra={}
+                <Input
+                    addonBefore="请输入API Key"
+                    onChange={(event) => {
+                        console.log(event.target.value.trim());
+                        API.setToken(event.target.value.trim());
+                    }}
+                />
+            </Drawer>
+            <Flex vertical gap={20} justify="center" align="center">
+                <Form
+                    labelCol={{ span: 6 }}
+                    wrapperCol={{ span: 18 }}
+                    form={form}
+                    name="course-info"
+                    autoComplete="off"
+                    onFinish={handleSubmit}
+                    initialValues={{ items: [{}] }}
                 >
-                    <Form.Item
-                        label="班级名"
-                        name="class-name"
-                        rules={[{ required: true }]}
+                    <Card
+                        size="small"
+                        title={`课程信息`}
+                        style={{ minWidth: "800px" }}
+                        actions={[
+                            <Button type="link" htmlType="submit">
+                                提交
+                            </Button>,
+                            <Button type="link" onClick={handleImport}>
+                                导入
+                            </Button>,
+                            <Button type="link" onClick={handleAIOptimize}>
+                                <ThunderboltOutlined />
+                                AI 优化
+                            </Button>,
+                        ]}
+                        // TODO: 完成卡片折叠 extra={}
                     >
-                        <Input />
-                    </Form.Item>
-                    <Form.Item
-                        label="课程名称"
-                        name="course-name"
-                        rules={[{ required: true }]}
-                    >
-                        <Input />
-                    </Form.Item>
+                        <Form.Item
+                            label="班级名"
+                            name="class-name"
+                            rules={[{ required: true }]}
+                        >
+                            <Input />
+                        </Form.Item>
+                        <Form.Item
+                            label="课程名称"
+                            name="course-name"
+                            rules={[{ required: true }]}
+                        >
+                            <Input />
+                        </Form.Item>
 
-                    <Form.Item
-                        label="授课时间"
-                        name="course-time"
-                        rules={[{ required: true }]}
+                        <Form.Item
+                            label="授课时间"
+                            name="course-time"
+                            rules={[{ required: true }]}
+                        >
+                            <RangePicker
+                                showTime={{ format: "HH:mm" }}
+                                format="YYYY-MM-DD HH:mm"
+                                onChange={(value, dateString) => {
+                                    console.log("Selected Time: ", value);
+                                    console.log(
+                                        "Formatted Selected Time: ",
+                                        dateString
+                                    );
+                                }}
+                            />
+                        </Form.Item>
+                        <Form.Item label="课程内容">
+                            <Form.List
+                                name="course-contents"
+                                rules={[
+                                    {
+                                        validator: async (_, contents) => {
+                                            if (
+                                                !contents ||
+                                                contents.length < 1
+                                            ) {
+                                                return Promise.reject(
+                                                    new Error(
+                                                        "至少需要有一个课程内容"
+                                                    )
+                                                );
+                                            }
+                                        },
+                                    },
+                                ]}
+                            >
+                                {(fields, opt, { errors }) => (
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            rowGap: 16,
+                                        }}
+                                    >
+                                        {fields.map((subField) => (
+                                            <Space key={subField.key}>
+                                                <Form.Item
+                                                    noStyle
+                                                    name={[
+                                                        subField.name,
+                                                        "item",
+                                                    ]}
+                                                    rules={[{ required: true }]}
+                                                >
+                                                    <Input
+                                                        style={{ width: 350 }}
+                                                        placeholder="填写课程内容"
+                                                    />
+                                                </Form.Item>
+                                                <CloseOutlined
+                                                    onClick={() => {
+                                                        opt.remove(
+                                                            subField.name
+                                                        );
+                                                    }}
+                                                />
+                                            </Space>
+                                        ))}
+                                        <Button
+                                            type="dashed"
+                                            onClick={() => opt.add()}
+                                            block
+                                        >
+                                            + 添加课程内容
+                                        </Button>
+                                        <Form.ErrorList errors={errors} />
+                                    </div>
+                                )}
+                            </Form.List>
+                        </Form.Item>
+                        <Form.Item label="教学目标">
+                            <Form.List
+                                name="course-objectives"
+                                rules={[
+                                    {
+                                        validator: async (_, objectives) => {
+                                            if (
+                                                !objectives ||
+                                                objectives.length < 1
+                                            ) {
+                                                return Promise.reject(
+                                                    new Error(
+                                                        "至少需要有一个课程目标"
+                                                    )
+                                                );
+                                            }
+                                        },
+                                    },
+                                ]}
+                            >
+                                {(fields, opt, { errors }) => (
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            rowGap: 16,
+                                        }}
+                                    >
+                                        {fields.map((subField) => (
+                                            <Space key={subField.key}>
+                                                <Form.Item
+                                                    noStyle
+                                                    name={[
+                                                        subField.name,
+                                                        "item",
+                                                    ]}
+                                                    rules={[{ required: true }]}
+                                                >
+                                                    <Input
+                                                        style={{ width: 350 }}
+                                                        placeholder="填写教学目标"
+                                                    />
+                                                </Form.Item>
+                                                <CloseOutlined
+                                                    onClick={() => {
+                                                        opt.remove(
+                                                            subField.name
+                                                        );
+                                                    }}
+                                                />
+                                            </Space>
+                                        ))}
+                                        <Button
+                                            type="dashed"
+                                            onClick={() => opt.add()}
+                                            block
+                                        >
+                                            + 添加教学目标
+                                        </Button>
+                                        <Form.ErrorList errors={errors} />
+                                    </div>
+                                )}
+                            </Form.List>
+                        </Form.Item>
+                    </Card>
+                </Form>
+                <StringListInput
+                    style={{ width: "800px" }}
+                    values_={students}
+                    onChange={(values) => {
+                        const className = form.getFieldValue("class-name");
+                        if (!className) return;
+                        for (const value of values) {
+                            if (!studentsContentRef.current.has(value)) {
+                                studentsContentRef.current.set(value, "");
+                            }
+                        }
+                        setStudents(values);
+                        localStorage.setItem(
+                            `${className}_std`,
+                            JSON.stringify(values)
+                        );
+                    }}
+                    onClear={() => {
+                        studentsContentRef.current.clear();
+                        setStudents([]);
+                    }}
+                    onClick={() => {}}
+                />
+                {students.map((student, index) => (
+                    <Card
+                        style={{ minWidth: "800px" }}
+                        key={index}
+                        size="small"
+                        title={
+                            <span>
+                                <span style={{ marginRight: "20px" }}>
+                                    {index}
+                                </span>
+                                {student}
+                            </span>
+                        }
                     >
-                        <RangePicker
-                            showTime={{ format: "HH:mm" }}
-                            format="YYYY-MM-DD HH:mm"
-                            onChange={(value, dateString) => {
-                                console.log("Selected Time: ", value);
-                                console.log(
-                                    "Formatted Selected Time: ",
-                                    dateString
+                        <Input.TextArea
+                            size="small"
+                            title="填写学生课堂表现关键词"
+                            autoSize={{ minRows: 1, maxRows: 12 }}
+                            defaultValue={studentsContentRef.current.get(
+                                student
+                            )}
+                            onChange={(e) => {
+                                studentsContentRef.current.set(
+                                    student,
+                                    e.target.value
                                 );
                             }}
                         />
-                    </Form.Item>
-                    <Form.Item label="课程内容">
-                        <Form.List
-                            name="course-contents"
-                            rules={[
-                                {
-                                    validator: async (_, contents) => {
-                                        if (!contents || contents.length < 1) {
-                                            return Promise.reject(
-                                                new Error(
-                                                    "至少需要有一个课程内容"
-                                                )
-                                            );
-                                        }
-                                    },
-                                },
-                            ]}
-                        >
-                            {(fields, opt, { errors }) => (
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        rowGap: 16,
-                                    }}
-                                >
-                                    {fields.map((subField) => (
-                                        <Space key={subField.key}>
-                                            <Form.Item
-                                                noStyle
-                                                name={[subField.name, "item"]}
-                                                rules={[{ required: true }]}
-                                            >
-                                                <Input
-                                                    style={{ width: 350 }}
-                                                    placeholder="填写课程内容"
-                                                />
-                                            </Form.Item>
-                                            <CloseOutlined
-                                                onClick={() => {
-                                                    opt.remove(subField.name);
-                                                }}
-                                            />
-                                        </Space>
-                                    ))}
-                                    <Button
-                                        type="dashed"
-                                        onClick={() => opt.add()}
-                                        block
-                                    >
-                                        + 添加课程内容
-                                    </Button>
-                                    <Form.ErrorList errors={errors} />
-                                </div>
-                            )}
-                        </Form.List>
-                    </Form.Item>
-                    <Form.Item label="教学目标">
-                        <Form.List
-                            name="course-objectives"
-                            rules={[
-                                {
-                                    validator: async (_, objectives) => {
-                                        if (
-                                            !objectives ||
-                                            objectives.length < 1
-                                        ) {
-                                            return Promise.reject(
-                                                new Error(
-                                                    "至少需要有一个课程目标"
-                                                )
-                                            );
-                                        }
-                                    },
-                                },
-                            ]}
-                        >
-                            {(fields, opt, { errors }) => (
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        rowGap: 16,
-                                    }}
-                                >
-                                    {fields.map((subField) => (
-                                        <Space key={subField.key}>
-                                            <Form.Item
-                                                noStyle
-                                                name={[subField.name, "item"]}
-                                                rules={[{ required: true }]}
-                                            >
-                                                <Input
-                                                    style={{ width: 350 }}
-                                                    placeholder="填写教学目标"
-                                                />
-                                            </Form.Item>
-                                            <CloseOutlined
-                                                onClick={() => {
-                                                    opt.remove(subField.name);
-                                                }}
-                                            />
-                                        </Space>
-                                    ))}
-                                    <Button
-                                        type="dashed"
-                                        onClick={() => opt.add()}
-                                        block
-                                    >
-                                        + 添加教学目标
-                                    </Button>
-                                    <Form.ErrorList errors={errors} />
-                                </div>
-                            )}
-                        </Form.List>
-                    </Form.Item>
-                </Card>
-            </Form>
-            <StringListInput
-                style={{ width: "800px" }}
-                values_={students}
-                onChange={(values) => {
-                    const className = form.getFieldValue("class-name");
-                    if (!className) return;
-                    for (const value of values) {
-                        if (!studentsContentRef.current.has(value)) {
-                            studentsContentRef.current.set(value, "");
+                    </Card>
+                ))}
+                <FloatButton
+                    icon={<FileTextFilled />}
+                    type="primary"
+                    tooltip="导出内容到剪切板."
+                    style={{ insetInlineEnd: 24 }}
+                    onClick={() => {
+                        if (!isFinishedRef.current) {
+                            sendWarning("内容可能不完整, 或未点击提交按钮.");
                         }
-                    }
-                    setStudents(values);
-                    localStorage.setItem(
-                        `${className}_std`,
-                        JSON.stringify(values)
-                    );
-                }}
-                onClear={() => {
-                    studentsContentRef.current.clear();
-                    setStudents([]);
-                }}
-                onClick={() => {}}
-            />
-            {students.map((student, index) => (
-                <Card
-                    style={{ minWidth: "800px" }}
-                    key={index}
-                    size="small"
-                    title={
-                        <span>
-                            <span style={{ marginRight: "20px" }}>{index}</span>
-                            {student}
-                        </span>
-                    }
-                >
-                    <Input.TextArea
-                        size="small"
-                        title="填写学生课堂表现关键词"
-                        autoSize={{ minRows: 1, maxRows: 12 }}
-                        defaultValue={studentsContentRef.current.get(student)}
-                        onChange={(e) => {
-                            studentsContentRef.current.set(
-                                student,
-                                e.target.value
+                        let result = "";
+                        for (const student of students) {
+                            result += `### ${student}\n`;
+                            result += template.replace(
+                                "{{courseFeedback}}",
+                                studentsContentRef.current.get(student) || ""
                             );
-                        }}
-                    />
-                </Card>
-            ))}
-            <FloatButton
-                icon={<FileTextFilled />}
-                type="primary"
-                tooltip="导出内容到剪切板."
-                style={{ insetInlineEnd: 24 }}
-                onClick={() => {
-                    if (!isFinishedRef.current) {
-                        sendWarning("内容可能不完整, 或未点击提交按钮.");
-                    }
-                    let result = "";
-                    for (const student of students) {
-                        result += `### ${student}\n`;
-                        result += template.replace(
-                            "{{courseFeedback}}",
-                            studentsContentRef.current.get(student) || ""
-                        );
-                        result += "\n\n---\n";
-                    }
-                    navigator.clipboard.writeText(result);
-                    sendMessage("已导出到剪切板.");
-                }}
-            />
-        </Flex>
+                            result += "\n\n---\n";
+                        }
+                        navigator.clipboard.writeText(result);
+                        sendMessage("已导出到剪切板.");
+                    }}
+                />
+                <FloatButton
+                    icon={<EllipsisOutlined />}
+                    tooltip="展开设置面板."
+                    style={{ insetBlockStart: 24 }}
+                    onClick={() => {
+                        setOpen(true);
+                    }}
+                />
+            </Flex>
+        </>
     );
 };
 export default Page;

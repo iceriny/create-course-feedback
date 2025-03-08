@@ -130,9 +130,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     if (!content) return;
                     content_form.setFieldValue(["content", index], content);
                 },
-                () => {
-                    // TODO: 完成 form值与 studentsContentRef 的同步, 或者 在 导出内容到剪切板 功能中 直接调用 form 值
-                },
+                () => {},
                 { content: PROMPT, role: "system" },
                 { content: template, role: "user" },
                 {
@@ -416,11 +414,14 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             sendWarning("内容可能不完整, 或未点击提交按钮.");
                         }
                         let result = "";
-                        for (const student of students) {
+                        for (const [index, student] of students.entries()) {
                             result += `### ${student}\n`;
                             result += template.replace(
                                 "{{courseFeedback}}",
-                                studentsContentRef.current.get(student) || ""
+                                content_form.getFieldValue([
+                                    "content",
+                                    index,
+                                ]) || ""
                             );
                             result += "\n\n---\n";
                         }

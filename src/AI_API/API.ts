@@ -79,9 +79,11 @@ class API {
     }
 
     async sendMessage(
-        callback?: (content: string) => void,
+        callback?: (content: string | null) => void,
+        onFinish?: () => void,
         ...message: Message[]
     ) {
+        console.log("sendMessage", message);
         API.messages.messages = API.messages.messages.concat(message);
         API.setMessageBody();
 
@@ -95,6 +97,8 @@ class API {
             return;
         }
         const decoder = new TextDecoder("utf-8");
+        let content = "";
+        console.log("Started streaming response");
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -107,16 +111,17 @@ class API {
             if (last.startsWith("data: ")) {
                 const data = last.slice(6);
                 if (data === "[DONE]") {
+                    onFinish?.();
                     break;
                 }
                 try {
                     const jsonData = JSON.parse(data);
-                    const content = jsonData.choices[0].delta.content;
+                    content += jsonData.choices[0].delta.content.trim() ?? "";
                     if (content) {
                         callback?.(content);
                     }
-                } finally {
-                    callback?.("");
+                } catch {
+                    callback?.(null);
                 }
             }
         }

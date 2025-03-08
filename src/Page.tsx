@@ -38,7 +38,7 @@ const PROMPT = `## 你是一个编程老师, 主要教小学和初高中的同�
 - 禁止出现额外的你自己猜想的\`剧情\`, 不要编写没有明确存在的具体事件, 比如\`某某在xxx最先...\`这样的内容
 - 请用更通用和宏观的语言表述问题,而非展示课堂细节.
 
-## 请仅仅回复你的课程反馈.`;
+## 请仅仅回复课程反馈的正文部分, 不包括其任何无关的格式或内容.`;
 
 const { RangePicker } = DatePicker;
 
@@ -55,14 +55,15 @@ interface PageProps {
     ) => void;
 }
 const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
-    const [form] = Form.useForm();
+    const [class_form] = Form.useForm();
+    const [content_form] = Form.useForm();
     const [students, setStudents] = useState<string[]>([]);
     const studentsContentRef = useRef<Map<string, string>>(new Map());
     const isFinishedRef = useRef(false);
     const [open, setOpen] = useState(false);
 
     const handleSubmit = useCallback(() => {
-        const data = form.getFieldsValue();
+        const data = class_form.getFieldsValue();
         data.get = (key: string) => {
             return data[key];
         };
@@ -88,7 +89,6 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             `${time[0].format("YYYY[年] MM[月]DD[日]")}`;
         // 数据过滤!
         const saveData = {
-            courseName,
             time: {
                 first: time[0].format("YYYY-MM-DD HH:mm"),
                 last: time[1].format("YYYY-MM-DD HH:mm"),
@@ -96,13 +96,14 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         };
         localStorage.setItem(className, JSON.stringify(saveData));
         isFinishedRef.current = true;
-    }, [form]);
+    }, [class_form]);
     const handleImport = useCallback(() => {
-        const data = localStorage.getItem(form.getFieldValue("class-name"));
+        const data = localStorage.getItem(
+            class_form.getFieldValue("class-name")
+        );
         if (data) {
             const dataObj = JSON.parse(data);
-            form.setFieldsValue({
-                "course-name": dataObj.courseName,
+            class_form.setFieldsValue({
                 "course-time": [
                     dayjs(dataObj.time.first),
                     dayjs(dataObj.time.last),
@@ -112,25 +113,36 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             sendMessage("未找到该班级的数据, 请检查班级名是否正确.");
         }
         const students = localStorage.getItem(
-            form.getFieldValue("class-name") + "_std"
+            `${class_form.getFieldValue("class-name")}_std`
         );
         if (students) {
             setStudents(JSON.parse(students));
         }
-    }, [form, sendMessage]);
+    }, [class_form, sendMessage]);
     const handleAIOptimize = useCallback(() => {
-        getAPI().sendMessage(
-            (msg) => {
-                console.log(msg);
-            },
-            { content: PROMPT, role: "system" },
-            { content: template, role: "user" },
-            {
-                content: studentsContentRef.current.get("许家豪") ?? "",
-                role: "user",
-            }
-        );
-    }, []);
+        for (const [index] of students.entries()) {
+            content_form.setFieldValue(
+                ["content", index],
+                "请稍后, AI 正在思考..."
+            );
+            getAPI().sendMessage(
+                (content) => {
+                    if (!content) return;
+                    content_form.setFieldValue(["content", index], content);
+                },
+                () => {
+                    // TODO: 完成 form值与 studentsContentRef 的同步, 或者 在 导出内容到剪切板 功能中 直接调用 form 值
+                },
+                { content: PROMPT, role: "system" },
+                { content: template, role: "user" },
+                {
+                    content:
+                        content_form.getFieldValue(["content", index]) ?? "",
+                    role: "user",
+                }
+            );
+        }
+    }, [content_form, students]);
     return (
         <>
             <Drawer
@@ -152,7 +164,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 <Form
                     labelCol={{ span: 6 }}
                     wrapperCol={{ span: 18 }}
-                    form={form}
+                    form={class_form}
                     name="course-info"
                     autoComplete="off"
                     onFinish={handleSubmit}
@@ -342,7 +354,8 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     style={{ width: "800px" }}
                     values_={students}
                     onChange={(values) => {
-                        const className = form.getFieldValue("class-name");
+                        const className =
+                            class_form.getFieldValue("class-name");
                         if (!className) return;
                         for (const value of values) {
                             if (!studentsContentRef.current.has(value)) {
@@ -361,36 +374,38 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     }}
                     onClick={() => {}}
                 />
-                {students.map((student, index) => (
-                    <Card
-                        style={{ minWidth: "800px" }}
-                        key={index}
-                        size="small"
-                        title={
-                            <span>
-                                <span style={{ marginRight: "20px" }}>
-                                    {index}
-                                </span>
-                                {student}
-                            </span>
-                        }
-                    >
-                        <Input.TextArea
+                <Form form={content_form} name="student-content">
+                    {students.map((student, index) => (
+                        <Card
+                            style={{ minWidth: "800px" }}
+                            key={index}
                             size="small"
-                            title="填写学生课堂表现关键词"
-                            autoSize={{ minRows: 1, maxRows: 12 }}
-                            defaultValue={studentsContentRef.current.get(
-                                student
-                            )}
-                            onChange={(e) => {
-                                studentsContentRef.current.set(
-                                    student,
-                                    e.target.value
-                                );
-                            }}
-                        />
-                    </Card>
-                ))}
+                            title={
+                                <span>
+                                    <span style={{ marginRight: "20px" }}>
+                                        {index}
+                                    </span>
+                                    {student}
+                                </span>
+                            }
+                        >
+                            <Form.Item name={["content", index]}>
+                                <Input.TextArea
+                                    size="small"
+                                    title="填写学生课堂表现关键词"
+                                    autoSize={{ minRows: 1, maxRows: 12 }}
+                                    onChange={(e) => {
+                                        studentsContentRef.current.set(
+                                            student,
+                                            e.target.value
+                                        );
+                                    }}
+                                />
+                            </Form.Item>
+                        </Card>
+                    ))}
+                </Form>
+
                 <FloatButton
                     icon={<FileTextFilled />}
                     type="primary"

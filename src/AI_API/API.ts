@@ -68,9 +68,25 @@ class API {
             },
             body: null,
         };
+        const api_key = localStorage.getItem("api_key");
+        if (api_key) {
+            API.setToken(api_key);
+        }
     }
     static setToken(token: string) {
         API.token = token;
+    }
+
+    static tokenReady() {
+        return (
+            API.token !== undefined && API.token !== "" && API.token !== null
+        );
+    }
+
+    static getMackToken() {
+        return `已存在令牌:${API.token.slice(0, 4)} ***……*** ${API.token.slice(
+            -6
+        )}`;
     }
 
     static setMessageBody() {

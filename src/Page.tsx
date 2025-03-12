@@ -16,6 +16,8 @@ import {
     Form,
     Input,
     Space,
+    ConfigProvider,
+    theme,
 } from "antd";
 import StringListInput from "./StringListInput";
 
@@ -29,14 +31,16 @@ import getAPI, { API } from "./AI_API";
 let template = "{{courseFeedback}}";
 
 const PROMPT = `## 你是一个编程老师, 主要教小学和初高中的同学学习编程.
+- 下文中标记[something]的内容是重点需要注意的内容
 ### 现在有一个任务:
-- 需要我提供你基本结构, 具体为课程名,时间, 课程内容, 教学目标,以及课堂表现
-- 其中课堂表现是你唯一要写的内容.
-- 你会根据提供的关键词扩写(大约150字)课堂表现.
-- 在写课堂表现时候, 要指出优点,表明缺点, 并且要注意语气和礼貌.
-- 请记住!!这是给家长提供的课程反馈, 一定要注意到家长的情绪.
-- 禁止出现额外的你自己猜想的\`剧情\`, 不要编写没有明确存在的具体事件, 比如\`某某在xxx最先...\`这样的内容
-- 请用更通用和宏观的语言表述问题,而非展示课堂细节.
+- 我{user}提供你基本信息, 具体为课程名, 时间, 课程内容, 教学目标.
+- 还会给你[单个]学生的课堂表现, 请你针对这个同学的课堂表现内容[优化]扩写, [大约150字].
+- [其中课堂表现是你唯一要写的内容].
+- [在写课堂表现时候, 要指出优点, 表明缺点, 并且要注意语气和礼貌.]
+- [请记住!!这是给家长提供的课程反馈, 一定要注意到家长的情绪.]
+- [禁止出现额外的你自己猜想的\`剧情\`, 不要编写没有明确存在的具体事件, 比如\`某某在xxx最先...\`这样的内容]
+- [请用更通用和宏观的语言表述问题,而非展示课堂细节.]
+- [请不要用太正式官方的语气, 要更口语化, 接地气一点.]
 
 ## 请仅仅回复课程反馈的正文部分, 不包括其任何无关的格式或内容.`;
 
@@ -54,6 +58,8 @@ interface PageProps {
         onClose?: VoidFunction
     ) => void;
 }
+
+const { useToken } = theme;
 const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [class_form] = Form.useForm();
     const [content_form] = Form.useForm();
@@ -61,6 +67,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const studentsContentRef = useRef<Map<string, string>>(new Map());
     const isFinishedRef = useRef(false);
     const [open, setOpen] = useState(false);
+    const { token } = useToken();
 
     const handleSubmit = useCallback(() => {
         const data = class_form.getFieldsValue();
@@ -86,7 +93,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             "**课堂表现:**\n" +
             "{{courseFeedback}}\n\n" +
             "哆啦人工智能小栈\n" +
-            `${time[0].format("YYYY[年] MM[月]DD[日]")}`;
+            `${dayjs().format("YYYY[年] MM[月]DD[日]")}`;
         // 数据过滤!
         const saveData = {
             time: {
@@ -123,7 +130,8 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         for (const [index] of students.entries()) {
             content_form.setFieldValue(
                 ["content", index],
-                "请稍后, AI 正在思考..."
+                content_form.getFieldValue(["content", index]) +
+                    "[请稍后, AI 正在思考...]"
             );
             getAPI().sendMessage(
                 (content) => {
@@ -133,6 +141,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 () => {},
                 { content: PROMPT, role: "system" },
                 { content: template, role: "user" },
+                { content: `学员姓名: ${students[index]}`, role: "user" },
                 {
                     content:
                         content_form.getFieldValue(["content", index]) ?? "",
@@ -152,9 +161,13 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             >
                 <Input
                     addonBefore="请输入API Key"
+                    placeholder={
+                        API.tokenReady() ? API.getMackToken() : "请输入"
+                    }
                     onChange={(event) => {
-                        console.log(event.target.value.trim());
-                        API.setToken(event.target.value.trim());
+                        const api_key = event.target.value.trim();
+                        API.setToken(api_key);
+                        localStorage.setItem("api_key", api_key);
                     }}
                 />
             </Drawer>
@@ -381,7 +394,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             title={
                                 <span>
                                     <span style={{ marginRight: "20px" }}>
-                                        {index}
+                                        {index + 1}
                                     </span>
                                     {student}
                                 </span>
@@ -429,14 +442,34 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                         sendMessage("已导出到剪切板.");
                     }}
                 />
-                <FloatButton
-                    icon={<EllipsisOutlined />}
-                    tooltip="展开设置面板."
-                    style={{ insetBlockStart: 24 }}
-                    onClick={() => {
-                        setOpen(true);
+                <ConfigProvider
+                    theme={{
+                        token: API.tokenReady()
+                            ? undefined
+                            : {
+                                  colorBgElevated: token.colorError,
+                              },
                     }}
-                />
+                >
+                    <FloatButton
+                        icon={
+                            <EllipsisOutlined
+                                style={{
+                                    color: API.tokenReady()
+                                        ? undefined
+                                        : "white",
+                                }}
+                            />
+                        }
+                        tooltip="展开设置面板."
+                        style={{
+                            insetBlockStart: 24,
+                        }}
+                        onClick={() => {
+                            setOpen(true);
+                        }}
+                    />
+                </ConfigProvider>
             </Flex>
         </>
     );

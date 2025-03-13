@@ -2,6 +2,7 @@ import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import React, { useCallback } from "react";
 import Page from "./Page";
+import UpdateInfo from "./updateInfo";
 
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
@@ -31,20 +32,12 @@ const App: React.FC = () => {
         },
         [messageApi]
     );
-    // const sendError = useCallback(
-    //     (
-    //         content: JointContent,
-    //         duration?: number | VoidFunction,
-    //         onClose?: VoidFunction
-    //     ) => {
-    //         messageApi.error(content, duration, onClose);
-    //     },
-    //     [messageApi]
-    // );
+
     return (
         <ConfigProvider locale={zhCN}>
             {contextHolder}
             <Page sendMessage={sendInfo} sendWarning={sendWarning} />
+            <UpdateInfo />
         </ConfigProvider>
     );
 };

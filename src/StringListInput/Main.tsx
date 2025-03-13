@@ -44,7 +44,8 @@ const Main: React.FC<NumberListInputProps> = ({
     useEffect(() => {
         if (values_ === undefined) return;
         setValues(values_);
-    }, [values_]);
+        // onChange?.(values_);
+    }, [onChange, values_]);
 
     const [length, setLength] = useState<number>(2);
 

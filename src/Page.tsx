@@ -26,6 +26,7 @@ import {
     Select,
     Collapse,
     Typography,
+    Tooltip,
 } from "antd";
 // 导入自定义组件
 import StringListInput from "./StringListInput";
@@ -144,6 +145,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [students_info, setStudentsInfo] = useState<{
         [key: number]: StudentsInfo;
     }>({});
+    const [prompt, setPrompt] = useState<string>(PROMPT);
     // 用于存储班级列表
     const [classList, setClasses] = useState<string[]>(
         getLocalStorage("class-name")
@@ -301,7 +303,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     setStudentsInfo(new_content);
                 },
                 // 系统提示词
-                { content: PROMPT, role: "system" },
+                { content: prompt, role: "system" },
                 // 课程模板
                 { content: template, role: "user" },
                 // 学生姓名
@@ -314,7 +316,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 }
             );
         },
-        [content_form, students, students_info]
+        [content_form, prompt, students, students_info]
     );
 
     // 处理AI优化学生课堂表现的回调函数
@@ -372,6 +374,28 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             localStorage.setItem("api_key", api_key);
                         }}
                     />
+                    <Flex vertical gap={5} justify="space-between">
+                        <Flex align="center" justify="space-between">
+                            <Typography.Text>提示词:</Typography.Text>
+                            <Tooltip title="恢复为默认">
+                                <Button
+                                    type="link"
+                                    icon={<ReloadOutlined />}
+                                    onClick={() => {
+                                        setPrompt(PROMPT);
+                                    }}
+                                />
+                            </Tooltip>
+                        </Flex>
+                        <Input.TextArea
+                            value={prompt}
+                            autoSize={{ minRows: 10, maxRows: 15 }}
+                            title="提示语"
+                            onChange={(event) => {
+                                setPrompt(event.target.value);
+                            }}
+                        />
+                    </Flex>
                 </Flex>
             </Drawer>
             {/* 主体内容 */}
@@ -687,13 +711,6 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                     size="small"
                                     title="填写学生课堂表现关键词"
                                     autoSize={{ minRows: 1, maxRows: 12 }}
-                                    // onChange={(e) => {
-                                    //     // 更新学生内容引用
-                                    //     studentsContentRef.current.set(
-                                    //         student,
-                                    //         e.target.value
-                                    //     );
-                                    // }}
                                 />
                             </Form.Item>
 

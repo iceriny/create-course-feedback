@@ -35,7 +35,7 @@ import dayjs from "dayjs";
 // 导入消息接口类型
 import type { JointContent } from "antd/es/message/interface";
 // 导入AI API接口
-import getAPI, { API } from "./AI_API";
+import getAPI, { API, type ModelType } from "./AI_API";
 // import { GetProps } from "antd/lib";
 
 // type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
@@ -152,6 +152,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const isFinishedRef = useRef(false);
     // 设置抽屉是否打开的状态
     const [open, setOpen] = useState(false);
+    const [model, setModel] = useState<ModelType>(API.getModel);
     // 获取主题token
     const { token } = useToken();
 
@@ -342,18 +343,36 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 }}
                 open={open}
             >
-                {/* API Key输入框 */}
-                <Input
-                    addonBefore="请输入API Key"
-                    placeholder={
-                        API.tokenReady() ? API.getMackToken() : "请输入"
-                    }
-                    onChange={(event) => {
-                        const api_key = event.target.value.trim();
-                        API.setToken(api_key);
-                        localStorage.setItem("api_key", api_key);
-                    }}
-                />
+                <Flex vertical gap={20}>
+                    {/* 选择AI模型 */}
+                    <Flex gap={5} align="center" justify="space-between">
+                        <Typography.Text>模型:</Typography.Text>
+                        <Select
+                            style={{ width: "85%" }}
+                            value={model}
+                            options={API.model_list.map((model) => ({
+                                value: model,
+                                label: model,
+                            }))}
+                            onSelect={(value) => {
+                                setModel(value);
+                                API.setModel(value);
+                            }}
+                        />
+                    </Flex>
+                    {/* API Key输入框 */}
+                    <Input
+                        addonBefore="请输入API Key"
+                        placeholder={
+                            API.tokenReady() ? API.getMackToken() : "请输入"
+                        }
+                        onChange={(event) => {
+                            const api_key = event.target.value.trim();
+                            API.setToken(api_key);
+                            localStorage.setItem("api_key", api_key);
+                        }}
+                    />
+                </Flex>
             </Drawer>
             {/* 主体内容 */}
             <Flex vertical gap={20} justify="center" align="center">

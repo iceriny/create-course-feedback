@@ -11,8 +11,9 @@ export interface MessageTool {
         strict: boolean;
     };
 }
+export type ModelType = "Qwen/QwQ-32B";
 export interface MessageBody {
-    model: "Qwen/QwQ-32B";
+    model: ModelType;
     messages: Message[];
     stream: boolean;
     max_tokens: number;
@@ -24,6 +25,16 @@ export interface MessageBody {
     n: number;
     response_format?: { type: string };
     tools?: MessageTool[];
+}
+
+export interface ModelListResponse {
+    object: "list";
+    data: {
+        id: string;
+        object: "model";
+        created: 0;
+        owned_by: "";
+    }[];
 }
 
 export type ContentType = "content" | "reasoning_content";
@@ -42,6 +53,8 @@ class API {
     private static token: string;
     static messages: MessageBody;
     static option: Option;
+    static model_list: string[] = [];
+    private static model: ModelType = "Qwen/QwQ-32B";
     constructor() {
         this.init();
         API.instance = this;
@@ -51,7 +64,7 @@ class API {
     }
     init() {
         API.messages = {
-            model: "Qwen/QwQ-32B",
+            model: API.model,
             messages: [],
             stream: true,
             max_tokens: 16384,
@@ -74,6 +87,7 @@ class API {
         if (api_key) {
             API.setToken(api_key);
         }
+        API.getModelList();
     }
     static setToken(token: string) {
         API.token = token;
@@ -167,11 +181,30 @@ class API {
                 }
             }
         }
+    }
 
-        // .then((response) => {
-        //     return response.json();
-        // })
-        // .catch((err) => console.error(err));
+    static async getModelList() {
+        const options = {
+            method: "GET",
+            headers: { Authorization: `Bearer ${API.token}` },
+        };
+
+        fetch("https://api.siliconflow.cn/v1/models?type=text", options)
+            .then((response) => response.json())
+            .then((response: ModelListResponse) => {
+                const data = response.data;
+                API.model_list = data.map((item) => item.id);
+            })
+            .catch((err) => console.error(err));
+    }
+
+    static setModel(model: ModelType) {
+        API.model = model;
+        API.messages.model = model;
+        API.setMessageBody();
+    }
+    static getModel() {
+        return API.model;
     }
 }
 

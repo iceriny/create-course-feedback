@@ -7,6 +7,7 @@ import {
     EllipsisOutlined,
     FileTextFilled,
     LoadingOutlined,
+    ReloadOutlined,
     ThunderboltOutlined,
 } from "@ant-design/icons";
 // 导入Ant Design UI组件
@@ -24,6 +25,7 @@ import {
     theme,
     Select,
     Collapse,
+    Typography,
 } from "antd";
 // 导入自定义组件
 import StringListInput from "./StringListInput";
@@ -236,10 +238,11 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             const students_str = localStorage.getItem(`${key}_std`);
             if (students_str) {
                 // 设置学生列表状态
-                setStudents(JSON.parse(students_str));
+                const _students: string[] = JSON.parse(students_str);
+                setStudents(_students);
                 // 为新增学生初始化内容
-                const new_students_info = { ...students_info };
-                for (const [index, value] of students.entries()) {
+                const new_students_info: { [key: number]: StudentsInfo } = {};
+                for (const [index, value] of _students.entries()) {
                     new_students_info[index] = {
                         name: value,
                         content: "",
@@ -250,8 +253,9 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 setStudentsInfo(new_students_info);
             }
         },
-        [class_form, sendMessage, students, students_info]
+        [class_form, sendMessage]
     );
+
     // 处理导入班级数据的回调函数
     const handleImport = useCallback(() => {
         // 从本地存储获取班级数据
@@ -264,30 +268,29 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         importClass(key);
     }, [class_form, importClass, sendWarning]);
 
-    // 处理AI优化学生课堂表现的回调函数
-    const handleAIOptimize = useCallback(() => {
-        if (isFinishedRef.current === false) {
-            sendWarning("请先完成课程信息的填写. 或再次点击提交按钮.");
-            return;
-        }
-        if (API.tokenReady() === false) {
-            sendWarning("请先输入API Key.");
-            return;
-        }
-        // 遍历学生列表
-        for (const [index] of students.entries()) {
+    // 处理单次AI调用
+    const handleSingleAIOptimize = useCallback(
+        (index: number) => {
             const new_content = { ...students_info };
-            console.log("new_content:", new_content);
             new_content[index].loading = true;
             setStudentsInfo(new_content);
             // 调用AI API发送消息
             getAPI().sendMessage(
                 // 成功回调，更新文本区域内容
-                (content) => {
-                    if (!content) return;
+                (content, type) => {
+                    if (type === null || content === null) return;
                     // content_form.setFieldValue(["content", index], content);
-                    console.log("content:", content);
-                    new_content[index].content = content;
+                    switch (type) {
+                        case "content":
+                            new_content[index].content = content;
+                            break;
+                        case "reasoning_content":
+                            new_content[index].think_content = content;
+                            break;
+                        default:
+                            console.warn("未知的type");
+                            break;
+                    }
                     setStudentsInfo(new_content);
                 },
                 // `完成`回调（空函数）
@@ -309,14 +312,25 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     role: "user",
                 }
             );
-            // 在文本区域添加等待提示
-            // content_form.setFieldValue(
-            //     ["content", index],
-            //     content_form.getFieldValue(["content", index]) +
-            //         "[请稍后, AI 正在思考...]"
-            // );
+        },
+        [content_form, students, students_info]
+    );
+
+    // 处理AI优化学生课堂表现的回调函数
+    const handleAIOptimize = useCallback(() => {
+        if (isFinishedRef.current === false) {
+            sendWarning("请先完成课程信息的填写. 或再次点击提交按钮.");
+            return;
         }
-    }, [content_form, sendWarning, students, students_info]);
+        if (API.tokenReady() === false) {
+            sendWarning("请先输入API Key.");
+            return;
+        }
+        // 遍历学生列表
+        for (const [index] of students.entries()) {
+            handleSingleAIOptimize(index);
+        }
+    }, [handleSingleAIOptimize, sendWarning, students]);
 
     return (
         <>
@@ -618,16 +632,34 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     {/* 遍历学生列表生成内容卡片 */}
                     {students.map((student, index) => (
                         <Card
-                            style={{ minWidth: "800px" }}
+                            style={{ width: "800px" }}
                             key={index}
                             size="small"
                             title={
-                                <span>
-                                    <span style={{ marginRight: "20px" }}>
-                                        {index + 1}
-                                    </span>
-                                    {student}
-                                </span>
+                                <Flex justify="space-between">
+                                    <Typography.Text>
+                                        <span style={{ marginRight: "20px" }}>
+                                            {index + 1}
+                                        </span>
+                                        {student}
+                                    </Typography.Text>
+                                    <Button
+                                        type="link"
+                                        style={{ marginLeft: "3rem" }}
+                                        size="small"
+                                        icon={<ReloadOutlined />}
+                                        onClick={() => {
+                                            handleSingleAIOptimize(index);
+                                        }}
+                                        disabled={
+                                            students_info[index].content
+                                                .length === 0 ||
+                                            students_info[index].loading
+                                        }
+                                    >
+                                        重新生成
+                                    </Button>
+                                </Flex>
                             }
                         >
                             {/* 学生课堂表现输入框 */}
@@ -649,9 +681,12 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             {
                                 // 加载动画
                                 students_info[index]?.loading && (
-                                    <LoadingOutlined />
+                                    <LoadingOutlined
+                                        style={{ color: token.colorPrimary }}
+                                    />
                                 )
                             }
+                            {/* ai输出内容 */}
                             <Collapse
                                 size="small"
                                 items={[
@@ -659,24 +694,23 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                         key: `think_${index}`,
                                         label: "思考",
                                         children: (
-                                            <p>
+                                            <Typography.Paragraph type="secondary">
                                                 {
-                                                    // students_info[index]
-                                                    //     ?.think_content
+                                                    students_info[index]
+                                                        ?.think_content
                                                 }
-                                            </p>
+                                            </Typography.Paragraph>
                                         ),
                                     },
                                     {
                                         key: `content_${index}`,
                                         label: "内容",
                                         children: (
-                                            <p>
-                                                {
-                                                    students_info[index]
-                                                        ?.think_content
-                                                }
-                                            </p>
+                                            <Typography.Paragraph
+                                                style={{ width: "100%" }}
+                                            >
+                                                {students_info[index]?.content}
+                                            </Typography.Paragraph>
                                         ),
                                     },
                                 ]}

@@ -26,6 +26,8 @@ export interface MessageBody {
     tools?: MessageTool[];
 }
 
+export type ContentType = "content" | "reasoning_content";
+
 interface Option {
     method: "POST";
     headers: {
@@ -52,7 +54,7 @@ class API {
             model: "Qwen/QwQ-32B",
             messages: [],
             stream: true,
-            max_tokens: 1024,
+            max_tokens: 16384,
             stop: null,
             temperature: 0.7,
             top_p: 1,
@@ -95,7 +97,7 @@ class API {
     }
 
     async sendMessage(
-        callback?: (content: string | null) => void,
+        callback?: (content: string | null, type?: ContentType) => void,
         onFinish?: () => void,
         ...message: Message[]
     ) {
@@ -114,30 +116,54 @@ class API {
         }
         const decoder = new TextDecoder("utf-8");
         let content = "";
+        let reasoning_content = "";
         console.log("Started streaming response");
+        let null_count = 0;
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done || null_count > 5) {
+                onFinish?.();
+                break;
+            }
 
             // 解码二进制数据为文本
             const chunkText = decoder.decode(value, { stream: true });
 
             // 处理逻辑（如拼接 JSON 或实时显示）
-            const last = chunkText;
-            if (last.startsWith("data: ")) {
-                const data = last.slice(6);
-                if (data === "[DONE]") {
-                    onFinish?.();
-                    break;
-                }
-                try {
-                    const jsonData = JSON.parse(data);
-                    content += jsonData.choices[0].delta.content.trim() ?? "";
-                    if (content) {
-                        callback?.(content);
+            const last = chunkText.split("\n");
+            for (const chunk of last) {
+                if (chunk.startsWith("data: ")) {
+                    const data = chunk.slice(6);
+                    if (data === "[DONE]") {
+                        onFinish?.();
+                        break;
                     }
-                } catch {
-                    callback?.(null);
+                    try {
+                        const jsonData = JSON.parse(data);
+                        const this_reasoning_content =
+                            jsonData.choices[0].delta.reasoning_content?.trim();
+                        if (this_reasoning_content) {
+                            reasoning_content += this_reasoning_content;
+                            callback?.(reasoning_content, "reasoning_content");
+                        }
+                        const this_content =
+                            jsonData.choices[0].delta.content?.trim();
+                        if (this_content) {
+                            content += this_content;
+                            callback?.(content, "content");
+                        }
+
+                        if (
+                            this_reasoning_content === null &&
+                            this_content === null
+                        ) {
+                            null_count++;
+                        }
+                    } catch (error) {
+                        console.error("Failed to parse JSON:", last);
+                        console.error(error);
+                        callback?.(null);
+                    }
                 }
             }
         }

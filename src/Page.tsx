@@ -45,7 +45,10 @@ import getAPI, { API, type ModelType } from "./AI_API";
 let template = "{{courseFeedback}}";
 
 // AI提示词模板，用于生成课程反馈内容
-const PROMPT = `## 角色定位：编程教师
+const PROMPT = {
+    programming: {
+        name: "编程",
+        prompt: `## 角色定位：编程教师
 - 你是一位专注于小学和初高中学生编程教育的老师
 - 以下[方括号]内容为重点要求
 
@@ -63,7 +66,35 @@ const PROMPT = `## 角色定位：编程教师
 - 语言风格[自然口语化]，避免过于正式或官方的表述，要更亲切，接地气
 
 ## 输出格式：
-请直接输出课堂表现文本，无需包含任何格式标记或额外内容`;
+请直接输出课堂表现文本，无需包含任何格式标记或额外内容`,
+    },
+    robot: {
+        name: "机器人",
+        prompt: `## 角色定位：机器人(机械搭建)教师
+- 你是一位专注于小学和初高中学生机器人(机械搭建)的老师
+- 以下[方括号]内容为重点要求
+
+## 任务说明：
+- 我会提供课程基本信息（课程名称、时间、内容概览、教学目标）
+- 我会提供[单个]学生的课堂表现关键词
+- 请针对这位学生的表现进行[优化扩写]，控制在[150字左右]
+
+## 内容要求：
+- [仅需撰写课堂表现部分]，不要修改其他内容
+- 表现描述需[平衡指出优点和不足]，语气友善且有建设性
+- [重要提醒]：这是发给家长的反馈，请注意家长感受和情绪
+- [禁止添加虚构内容]，不要编造未提及的具体事件（如"某某最先完成..."）
+- 使用[宏观描述]而非具体课堂细节
+- 语言风格[自然口语化]，避免过于正式或官方的表述，要更亲切，接地气
+
+## 输出格式：
+请直接输出课堂表现文本，无需包含任何格式标记或额外内容`,
+    },
+} as const;
+
+type PromptType = keyof typeof PROMPT;
+type Promp = (typeof PROMPT)[PromptType];
+
 //  `## 你是一个编程老师, 主要教小学和初高中的同学学习编程.
 // - 下文中标记[something]的内容是重点需要注意的内容
 // ### 现在有一个任务:
@@ -145,7 +176,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [students_info, setStudentsInfo] = useState<{
         [key: number]: StudentsInfo;
     }>({});
-    const [prompt, setPrompt] = useState<string>(PROMPT);
+    const [prompt, setPrompt] = useState<string>(PROMPT.programming.prompt);
     // 用于存储班级列表
     const [classList, setClasses] = useState<string[]>(
         getLocalStorage("class-name")
@@ -374,16 +405,30 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             localStorage.setItem("api_key", api_key);
                         }}
                     />
+                    {/* 提示词自定义输入框 */}
                     <Flex vertical gap={5} justify="space-between">
                         <Flex align="center" justify="space-between">
                             <Typography.Text>提示词:</Typography.Text>
                             <Tooltip title="恢复为默认">
-                                <Button
+                                {/* <Button
                                     type="link"
                                     icon={<ReloadOutlined />}
                                     onClick={() => {
                                         setPrompt(PROMPT);
                                     }}
+                                /> */}
+                                <Select
+                                    style={{ width: "30%" }}
+                                    defaultValue={"programming" as PromptType}
+                                    options={Object.entries(PROMPT).map(
+                                        (prompt) => ({
+                                            value: prompt[0],
+                                            label: prompt[1].name,
+                                        })
+                                    )}
+                                    onSelect={(value) =>
+                                        setPrompt(PROMPT[value].prompt)
+                                    }
                                 />
                             </Tooltip>
                         </Flex>

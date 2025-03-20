@@ -435,6 +435,9 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             const api_key = event.target.value.trim();
                             API.setToken(api_key);
                             localStorage.setItem("api_key", api_key);
+                            sendMessage(
+                                "API Key设置成功, 请刷新页面加载可用模型."
+                            );
                         }}
                     />
                     {/* 提示词自定义输入框 */}

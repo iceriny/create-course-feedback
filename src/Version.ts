@@ -23,7 +23,7 @@ class Version {
             const oldVersion = localStorage.getItem("version");
 
             // 从本地配置文件加载版本信息
-            const response = await fetch("/src/version.config.json");
+            const response = await fetch("version.config.json");
             const data: VersionData = await response.json();
 
             if (

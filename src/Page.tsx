@@ -8,6 +8,7 @@ import {
     FileTextFilled,
     LoadingOutlined,
     ReloadOutlined,
+    SaveOutlined,
     ThunderboltOutlined,
 } from "@ant-design/icons";
 // 导入Ant Design UI组件
@@ -37,15 +38,22 @@ import dayjs from "dayjs";
 import type { JointContent } from "antd/es/message/interface";
 // 导入AI API接口
 import getAPI, { API, type ModelType } from "./AI_API";
+import { v4 as uuid_v4 } from "uuid";
 // import { GetProps } from "antd/lib";
 
 // type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
 
-// 定义课程反馈模板，{{courseFeedback}}为占位符
-let template = "{{courseFeedback}}";
+type PromptType = "programming" | "robot";
+
+interface PromptItem {
+    name: string;
+    prompt: string;
+}
+
+type PromptItems = Record<PromptType, PromptItem>;
 
 // AI提示词模板，用于生成课程反馈内容
-const PROMPT = {
+const PROMPTS: PromptItems = {
     programming: {
         name: "编程",
         prompt: `## 角色定位：编程教师
@@ -92,8 +100,23 @@ const PROMPT = {
     },
 } as const;
 
-type PromptType = keyof typeof PROMPT;
-type Promp = (typeof PROMPT)[PromptType];
+function getPromptFromLocalStorage(): Record<string, PromptItem> {
+    const prompts = localStorage.getItem("prompts");
+    if (prompts) {
+        return JSON.parse(prompts) as PromptItems;
+    }
+    return {};
+}
+function savePromptToLocalStorage(prompts: Record<string, PromptItem>) {
+    const _t: Record<string, PromptItem> = {};
+    for (const [key, item] of Object.entries(prompts)) {
+        if (key in PROMPTS) {
+            continue;
+        }
+        _t[key] = item;
+    }
+    localStorage.setItem("prompts", JSON.stringify(prompts));
+}
 
 //  `## 你是一个编程老师, 主要教小学和初高中的同学学习编程.
 // - 下文中标记[something]的内容是重点需要注意的内容
@@ -108,6 +131,9 @@ type Promp = (typeof PROMPT)[PromptType];
 // - [请不要用太正式官方的语气, 要更口语化, 接地气一点.]
 
 // ## 请仅仅回复课程反馈的正文部分, 不包括其任何无关的格式或内容.`;
+
+// 定义课程反馈模板，{{courseFeedback}}为占位符
+let template = "{{courseFeedback}}";
 
 // 从DatePicker组件中解构出RangePicker组件
 const { RangePicker } = DatePicker;
@@ -147,8 +173,8 @@ function addToLocalStorageArray(key: string, ...values: string[]) {
 }
 
 // 获取LocalStorage中的 数组数据
-function getLocalStorage(key: string) {
-    const array = JSON.parse(localStorage.getItem(key) ?? "[]");
+function getLocalStorage<T>(key: string) {
+    const array = JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
     return array;
 }
 
@@ -176,7 +202,13 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const [students_info, setStudentsInfo] = useState<{
         [key: number]: StudentsInfo;
     }>({});
-    const [prompt, setPrompt] = useState<string>(PROMPT.programming.prompt);
+    // 提示词Key
+    const [promptKey, setPromptKey] = useState<PromptType>("programming");
+    // 提示词内容
+    const [promptItems, setPromptItems] = useState<Record<string, PromptItem>>({
+        ...PROMPTS,
+        ...getPromptFromLocalStorage(),
+    });
     // 用于存储班级列表
     const [classList, setClasses] = useState<string[]>(
         getLocalStorage("class-name")
@@ -213,10 +245,10 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         const time = data.get("course-time") as [dayjs.Dayjs, dayjs.Dayjs];
         // 构建课程反馈模板
         template =
-            `**课程名称:** 《${courseName}》\n` +
+            `**课程名称:**《${courseName}》\n\n` +
             `**授课时间:** @${time[0].format(
                 "YYYY[年] MM[月]DD[日] HH:mm"
-            )} -> ${time[1].format("HH:mm")}\n` +
+            )} -> ${time[1].format("HH:mm")}\n\n` +
             `**课程内容概览:**\n${courseContents.join("")}\n` +
             `**教学目标:**\n${courseObjectives.join("")}\n` +
             "**课堂表现:**\n" +
@@ -334,7 +366,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     setStudentsInfo(new_content);
                 },
                 // 系统提示词
-                { content: prompt, role: "system" },
+                { content: promptItems[promptKey].prompt, role: "system" },
                 // 课程模板
                 { content: template, role: "user" },
                 // 学生姓名
@@ -347,7 +379,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                 }
             );
         },
-        [content_form, prompt, students, students_info]
+        [content_form, promptItems, promptKey, students, students_info]
     );
 
     // 处理AI优化学生课堂表现的回调函数
@@ -409,7 +441,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                     <Flex vertical gap={5} justify="space-between">
                         <Flex align="center" justify="space-between">
                             <Typography.Text>提示词:</Typography.Text>
-                            <Tooltip title="恢复为默认">
+                            <Tooltip title="选择模板">
                                 {/* <Button
                                     type="link"
                                     icon={<ReloadOutlined />}
@@ -419,25 +451,108 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                 /> */}
                                 <Select
                                     style={{ width: "30%" }}
-                                    defaultValue={"programming" as PromptType}
-                                    options={Object.entries(PROMPT).map(
-                                        (prompt) => ({
-                                            value: prompt[0],
-                                            label: prompt[1].name,
-                                        })
-                                    )}
-                                    onSelect={(value) =>
-                                        setPrompt(PROMPT[value].prompt)
+                                    defaultValue={
+                                        "programming" as PromptType | "custom"
                                     }
+                                    options={[
+                                        ...Object.entries(promptItems).map(
+                                            (prompt) => ({
+                                                value: prompt[0],
+                                                label: prompt[1].name,
+                                            })
+                                        ),
+                                        { value: "custom", label: "自定义" },
+                                    ]}
+                                    onSelect={(value) => {
+                                        if (value === "custom") {
+                                            const uid: string = uuid_v4();
+                                            setPromptItems({
+                                                ...promptItems,
+                                                [uid]: {
+                                                    name: "请输入提示词名称",
+                                                    prompt: promptItems[
+                                                        promptKey
+                                                    ].prompt,
+                                                },
+                                            });
+                                            setPromptKey(uid as PromptType);
+                                        } else {
+                                            setPromptKey(value);
+                                        }
+                                    }}
                                 />
                             </Tooltip>
                         </Flex>
+                        <Input
+                            addonBefore="名称"
+                            addonAfter={
+                                <Flex gap={20}>
+                                    <CloseOutlined
+                                        style={{
+                                            fontSize: token.controlHeightXS,
+                                            color:
+                                                promptKey in PROMPTS
+                                                    ? undefined
+                                                    : token.colorError,
+                                        }}
+                                        onClick={() => {
+                                            const _t = { ...promptItems };
+                                            delete _t[promptKey];
+                                            setPromptKey(
+                                                Object.keys(
+                                                    promptItems
+                                                )[0] as PromptType
+                                            );
+                                            setPromptItems(_t);
+
+                                            savePromptToLocalStorage(_t);
+                                        }}
+                                    />
+                                    <SaveOutlined
+                                        style={{
+                                            fontSize: token.controlHeightXS,
+                                            color:
+                                                promptKey in PROMPTS
+                                                    ? undefined
+                                                    : token.colorPrimary,
+                                        }}
+                                        onClick={() => {
+                                            savePromptToLocalStorage(
+                                                promptItems
+                                            );
+                                        }}
+                                    />
+                                </Flex>
+                            }
+                            value={promptItems[promptKey].name}
+                            disabled={promptKey in PROMPTS}
+                            onChange={(event) => {
+                                const value = event.target.value;
+                                const old_items = {
+                                    ...promptItems,
+                                    [promptKey]: {
+                                        ...promptItems[promptKey],
+                                        name: value,
+                                    },
+                                };
+                                setPromptItems(old_items);
+                            }}
+                        />
                         <Input.TextArea
-                            value={prompt}
+                            disabled={promptKey in PROMPTS}
+                            value={promptItems[promptKey].prompt}
                             autoSize={{ minRows: 10, maxRows: 15 }}
                             title="提示语"
                             onChange={(event) => {
-                                setPrompt(event.target.value);
+                                const value = event.target.value;
+                                const old_items = {
+                                    ...promptItems,
+                                    [promptKey]: {
+                                        ...promptItems[promptKey],
+                                        prompt: value,
+                                    },
+                                };
+                                setPromptItems(old_items);
                             }}
                         />
                     </Flex>

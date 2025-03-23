@@ -1,5 +1,5 @@
 // 导入React核心组件和钩子
-import { FC, useCallback, useRef, useState } from "react";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
 
 // 导入Ant Design图标组件
 import {
@@ -172,6 +172,15 @@ function addToLocalStorageArray(key: string, ...values: string[]) {
     return array;
 }
 
+interface HistoryType {
+    courseName: string;
+    courseContents: string[];
+    courseObjectives: string[];
+}
+interface HistorysType {
+    [key: string]: HistoryType;
+}
+
 // 获取LocalStorage中的 数组数据
 function getLocalStorage<T>(key: string) {
     const array = JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
@@ -218,8 +227,17 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     // 设置抽屉是否打开的状态
     const [open, setOpen] = useState(false);
     const [model, setModel] = useState<ModelType>(API.getModel);
+    // 历史课程信息
+    const [history, setHistory] = useState<HistorysType>({});
     // 获取主题token
     const { token } = useToken();
+
+    useEffect(() => {
+        const h = localStorage.getItem("class-history");
+        if (h) {
+            setHistory(JSON.parse(h));
+        }
+    }, []);
 
     // 处理表单提交的回调函数
     const handleSubmit = useCallback(() => {
@@ -255,6 +273,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             "{{courseFeedback}}\n\n" +
             "哆啦人工智能小栈\n" +
             `${dayjs().format("YYYY[年] MM[月]DD[日]")}`;
+
         // 保存数据到本地存储
         const saveData: ClassTime = {
             time: {
@@ -266,9 +285,28 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         localStorage.setItem(className, JSON.stringify(saveData));
         const classList = addToLocalStorageArray("class-name", className);
         setClasses(classList);
+        // 添加到历史记录
+        const new_history = {
+            ...history,
+            [uuid_v4()]: {
+                courseName,
+                courseContents: data.get("course-contents"),
+                courseObjectives: data.get("course-objectives"),
+            },
+        };
+        // 限制历史记录的长度
+        const keys$ = Object.keys(new_history);
+        if (keys$.length > 10) {
+            const delete_key = Object.keys(new_history)[0];
+            delete new_history[delete_key];
+        }
+        // save
+        setHistory(new_history);
+        localStorage.setItem("class-history", JSON.stringify(new_history));
+
         // 标记表单已完成
         isFinishedRef.current = true;
-    }, [class_form]);
+    }, [class_form, history]);
 
     // 导入班级数据
     const importClass = useCallback(
@@ -397,6 +435,22 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             handleSingleAIOptimize(index);
         }
     }, [handleSingleAIOptimize, sendWarning, students]);
+
+    // 加载历史数据
+    const handleLoadHistoryData = useCallback(
+        (key: string) => {
+            const data = history[key];
+            if (data) {
+                // TODO: 加载数据到 class_form
+                class_form.setFieldsValue({
+                    "course-name": data.courseName,
+                    "course-contents": data.courseContents,
+                    "course-objectives": data.courseObjectives,
+                });
+            }
+        },
+        [class_form, history]
+    );
 
     return (
         <>
@@ -605,7 +659,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                         ]}
                         // TODO: 完成卡片折叠 extra={}
                     >
-                        {/* 班级名表单项 */}
+                        {/* 班级名 表单项 */}
                         <Form.Item
                             label="班级名"
                             name="class-name"
@@ -634,16 +688,34 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                             />
                         </Form.Item>
 
-                        {/* 课程名称表单项 */}
+                        {/* 课程名称 表单项 */}
                         <Form.Item
                             label="课程名称"
                             name="course-name"
                             rules={[{ required: true }]}
                         >
-                            <Input />
+                            <Input
+                                addonAfter={
+                                    <Select
+                                        defaultValue={null}
+                                        style={{ width: 120 }}
+                                        onSelect={(value: string | null) => {
+                                            if (value !== null) {
+                                                handleLoadHistoryData(value);
+                                            }
+                                        }}
+                                        options={Object.keys(history).map(
+                                            (key) => ({
+                                                value: key,
+                                                label: history[key].courseName,
+                                            })
+                                        )}
+                                    />
+                                }
+                            />
                         </Form.Item>
 
-                        {/* 授课时间表单项 */}
+                        {/* 授课时间 表单项 */}
                         <Form.Item
                             label="授课时间"
                             name="course-time"

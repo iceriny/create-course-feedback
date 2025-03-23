@@ -669,6 +669,8 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                 addonAfter={
                                     <Select
                                         defaultValue={null}
+                                        notFoundContent="无录入班级信息"
+                                        placeholder="选择班级"
                                         style={{ width: 120 }}
                                         onSelect={(value: string | null) => {
                                             if (value !== null) {
@@ -698,6 +700,8 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                 addonAfter={
                                     <Select
                                         defaultValue={null}
+                                        notFoundContent="无历史记录"
+                                        placeholder="历史记录"
                                         style={{ width: 120 }}
                                         onSelect={(value: string | null) => {
                                             if (value !== null) {

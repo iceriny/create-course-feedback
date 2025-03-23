@@ -274,7 +274,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
             "哆啦人工智能小栈\n" +
             `${dayjs().format("YYYY[年] MM[月]DD[日]")}`;
 
-        // 保存数据到本地存储
+        // 保存班级数据到本地存储
         const saveData: ClassTime = {
             time: {
                 first: time[0].format("YYYY-MM-DD HH:mm"),
@@ -288,12 +288,31 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
         // 添加到历史记录
         const new_history = {
             ...history,
-            [uuid_v4()]: {
+        };
+        const Already_Existing_Names = new Set();
+        for (const key in new_history) {
+            const { courseName: _courseName } = new_history[key];
+            Already_Existing_Names.add(_courseName);
+        }
+        if (Already_Existing_Names.has(className)) {
+            for (const key in new_history) {
+                const { courseName: _courseName } = new_history[key];
+                if (_courseName === className) {
+                    new_history[key] = {
+                        courseName,
+                        courseContents: data.get("course-contents"),
+                        courseObjectives: data.get("course-objectives"),
+                    };
+                }
+            }
+        } else {
+            new_history[uuid_v4()] = {
                 courseName,
                 courseContents: data.get("course-contents"),
                 courseObjectives: data.get("course-objectives"),
-            },
-        };
+            };
+        }
+
         // 限制历史记录的长度
         const keys$ = Object.keys(new_history);
         if (keys$.length > 10) {
@@ -540,6 +559,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                 />
                             </Tooltip>
                         </Flex>
+                        {/* 自定义提示词名称 */}
                         <Input
                             addonBefore="名称"
                             addonAfter={
@@ -595,6 +615,7 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
                                 setPromptItems(old_items);
                             }}
                         />
+                        {/* 提示词内容 */}
                         <Input.TextArea
                             disabled={promptKey in PROMPTS}
                             value={promptItems[promptKey].prompt}

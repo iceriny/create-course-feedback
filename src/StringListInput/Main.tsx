@@ -11,12 +11,14 @@ interface NumberListInputProps {
     onClear?: () => void;
     onClick?: (index: number, value?: string) => void;
     style?: React.CSSProperties;
+    onActive?: (change_index: number, activated_list: boolean[]) => void;
 }
 
 function getSingleNumberInputComponent(
     length: number,
     props: Omit<Omit<Omit<SingleNumberInputProps, "index">, "id">, "value">,
-    values?: string[]
+    values?: string[],
+    activated_list?: boolean[]
 ) {
     const components = [];
     for (let i = 0; i < length; i++) {
@@ -26,6 +28,7 @@ function getSingleNumberInputComponent(
                 key={i}
                 id={"input-" + i}
                 index={i}
+                activated={activated_list?.[i]}
                 {...props}
             />
         );
@@ -38,14 +41,28 @@ const Main: React.FC<NumberListInputProps> = ({
     onChange,
     onClear,
     onClick,
+    onActive,
     style,
 }) => {
     const [values, setValues] = useState<string[]>(values_ || []);
+    const [activated_list, setActivatedList] = useState<boolean[]>(
+        values_?.map(() => true) || []
+    );
     useEffect(() => {
         if (values_ === undefined) return;
         setValues(values_);
         // onChange?.(values_);
     }, [onChange, values_]);
+
+    const handleActive = useCallback(
+        (index: number) => {
+            const new_list = [...activated_list];
+            new_list[index] = !new_list[index];
+            setActivatedList(new_list);
+            onActive?.(index, new_list);
+        },
+        [activated_list, onActive]
+    );
 
     const [length, setLength] = useState<number>(2);
 
@@ -89,8 +106,10 @@ const Main: React.FC<NumberListInputProps> = ({
                     onChange: handleChange,
                     onClick,
                     onBackspace,
+                    onActive: handleActive,
                 },
-                values
+                values,
+                activated_list
             )}
             {values.length > 0 && (
                 <Button

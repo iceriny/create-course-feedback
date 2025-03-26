@@ -235,6 +235,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const [history, setHistory] = useState<HistorysType>({});
     // 获取主题token
     const { token } = useToken();
+    const students_activated_list_ref = useRef<boolean[]>([]);
 
     useEffect(() => {
         const h = localStorage.getItem("class-history");
@@ -488,7 +489,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         }
         // 遍历学生列表
         for (const [index] of students.entries()) {
-            handleSingleAIOptimize(index);
+            if (students_activated_list_ref.current[index]) {
+                handleSingleAIOptimize(index);
+            }
         }
     }, [handleSingleAIOptimize, sendWarning, students]);
 
@@ -1006,6 +1009,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         }}
                         onClick={(index, value) => {
                             console.log("点击了学生:", index, value);
+                        }}
+                        onActive={(_, activated_list) => {
+                            students_activated_list_ref.current = [
+                                ...activated_list,
+                            ];
                         }}
                     />
                 </Col>

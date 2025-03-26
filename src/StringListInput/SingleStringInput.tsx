@@ -1,25 +1,29 @@
-import { Input } from "antd";
+import { Checkbox, Input } from "antd";
 import type { InputProps as InputStringProps } from "antd";
 
 export interface SingleNumberInputProps {
     defaultValue?: string;
     value?: string;
+    activated?: boolean;
     id: string;
     index: number;
     onChange?: (value: string, index: number) => void;
     onPressEnter?: (value: string, index: number) => void;
     onBackspace?: (index: number) => void;
     onClick?: (index: number, value?: string) => void;
+    onActive?: (index: number) => void;
 }
 const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
     defaultValue,
     value,
     id,
     index,
+    activated,
     onChange,
     onPressEnter,
     onBackspace,
     onClick,
+    onActive,
 }) => {
     const handleChange: InputStringProps["onChange"] = (value) => {
         const newValue = value.target.value;
@@ -48,11 +52,17 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
             value={value}
             addonBefore={
                 <div
-                    style={{ padding: "0 10px" }}
                     onClick={() => {
                         onClick?.(index, value);
                     }}
                 >
+                    <Checkbox
+                        style={{ paddingRight: "0.5em" }}
+                        checked={activated}
+                        onChange={() => {
+                            onActive?.(index);
+                        }}
+                    />
                     {index + 1}
                 </div>
             }

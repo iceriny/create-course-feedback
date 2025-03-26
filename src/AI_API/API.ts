@@ -149,7 +149,6 @@ class API {
                 if (chunk.startsWith("data: ")) {
                     const data = chunk.slice(6);
                     if (data === "[DONE]") {
-                        onFinish?.();
                         break;
                     }
                     try {

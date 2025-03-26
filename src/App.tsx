@@ -1,17 +1,16 @@
 import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import React, { useCallback } from "react";
-import Page from "./Page";
 import UpdateInfo from "./updateInfo";
 
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import { JointContent } from "antd/es/message/interface";
+import Page from "./Page";
 
 dayjs.locale("en");
 const App: React.FC = () => {
     const [messageApi, contextHolder] = message.useMessage();
-
     const sendInfo = useCallback(
         (
             content: JointContent,
@@ -34,7 +33,16 @@ const App: React.FC = () => {
     );
 
     return (
-        <ConfigProvider locale={zhCN}>
+        <ConfigProvider
+            locale={zhCN}
+            theme={{
+                components: {
+                    Layout: {
+                        headerColor: "rgb(255, 255, 255)",
+                    },
+                },
+            }}
+        >
             {contextHolder}
             <Page sendMessage={sendInfo} sendWarning={sendWarning} />
             <UpdateInfo />

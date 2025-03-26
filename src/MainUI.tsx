@@ -202,6 +202,7 @@ interface StudentsInfo {
     content: string;
     think_content: string;
     loading: boolean;
+    activated: boolean;
 }
 // 主页组件定义
 const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
@@ -235,7 +236,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const [history, setHistory] = useState<HistorysType>({});
     // 获取主题token
     const { token } = useToken();
-    const students_activated_list_ref = useRef<boolean[]>([]);
 
     useEffect(() => {
         const h = localStorage.getItem("class-history");
@@ -391,6 +391,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         content: "",
                         think_content: "",
                         loading: false,
+                        activated: true,
                     };
                 }
                 setStudentsInfo(new_students_info);
@@ -489,11 +490,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         }
         // 遍历学生列表
         for (const [index] of students.entries()) {
-            if (students_activated_list_ref.current[index]) {
+            if (students_info[index].activated) {
                 handleSingleAIOptimize(index);
             }
         }
-    }, [handleSingleAIOptimize, sendWarning, students]);
+    }, [handleSingleAIOptimize, sendWarning, students, students_info]);
 
     // 加载历史数据
     const handleLoadHistoryData = useCallback(
@@ -978,6 +979,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     {/* 学生列表输入组件 */}
                     <StringListInput
                         values_={students}
+                        activated_list_={Object.values(students_info).map(
+                            (student) => student.activated
+                        )}
                         onChange={(values) => {
                             // 获取班级名称
                             const className =
@@ -991,11 +995,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     content: "",
                                     think_content: "",
                                     loading: false,
+                                    activated: true,
                                 };
                             }
                             setStudentsInfo(new_students_info);
                             // 更新学生列表状态
                             setStudents(values);
+
                             // 保存学生列表到本地存储
                             localStorage.setItem(
                                 `${className}_std`,
@@ -1007,13 +1013,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             setStudentsInfo({});
                             setStudents([]);
                         }}
-                        onClick={(index, value) => {
-                            console.log("点击了学生:", index, value);
-                        }}
-                        onActive={(_, activated_list) => {
-                            students_activated_list_ref.current = [
-                                ...activated_list,
-                            ];
+                        onActive={(index, activated_list) => {
+                            const new_info = { ...students_info };
+                            new_info[index].activated = activated_list[index];
+                            setStudentsInfo(new_info);
                         }}
                     />
                 </Col>
@@ -1067,6 +1070,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 {/* 学生课堂表现输入框 */}
                                 <Form.Item name={["content", index]}>
                                     <Input.TextArea
+                                        disabled={
+                                            !students_info[index].activated
+                                        }
                                         size="small"
                                         title="填写学生课堂表现关键词"
                                         autoSize={{
@@ -1087,40 +1093,42 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     )
                                 }
                                 {/* ai输出内容 */}
-                                <Collapse
-                                    size="small"
-                                    items={[
-                                        {
-                                            key: `think_${index}`,
-                                            label: "思考",
-                                            children: (
-                                                <Typography.Paragraph type="secondary">
-                                                    {
-                                                        students_info[index]
-                                                            ?.think_content
-                                                    }
-                                                </Typography.Paragraph>
-                                            ),
-                                        },
-                                        {
-                                            key: `content_${index}`,
-                                            label: "内容",
-                                            children: (
-                                                <Typography.Paragraph
-                                                    style={{
-                                                        width: "100%",
-                                                    }}
-                                                >
-                                                    {
-                                                        students_info[index]
-                                                            ?.content
-                                                    }
-                                                </Typography.Paragraph>
-                                            ),
-                                        },
-                                    ]}
-                                    defaultActiveKey={[`content_${index}`]}
-                                />
+                                {students_info[index].activated && (
+                                    <Collapse
+                                        size="small"
+                                        items={[
+                                            {
+                                                key: `think_${index}`,
+                                                label: "思考",
+                                                children: (
+                                                    <Typography.Paragraph type="secondary">
+                                                        {
+                                                            students_info[index]
+                                                                ?.think_content
+                                                        }
+                                                    </Typography.Paragraph>
+                                                ),
+                                            },
+                                            {
+                                                key: `content_${index}`,
+                                                label: "内容",
+                                                children: (
+                                                    <Typography.Paragraph
+                                                        style={{
+                                                            width: "100%",
+                                                        }}
+                                                    >
+                                                        {
+                                                            students_info[index]
+                                                                ?.content
+                                                        }
+                                                    </Typography.Paragraph>
+                                                ),
+                                            },
+                                        ]}
+                                        defaultActiveKey={[`content_${index}`]}
+                                    />
+                                )}
                             </Card>
                         ))}
                     </Form>

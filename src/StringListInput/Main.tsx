@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 interface NumberListInputProps {
     length?: number;
     values_?: string[];
+    activated_list_?: boolean[];
     onChange?: (value: string[]) => void;
     onClear?: () => void;
     onClick?: (index: number, value?: string) => void;
@@ -38,6 +39,7 @@ function getSingleNumberInputComponent(
 
 const Main: React.FC<NumberListInputProps> = ({
     values_,
+    activated_list_,
     onChange,
     onClear,
     onClick,
@@ -46,13 +48,15 @@ const Main: React.FC<NumberListInputProps> = ({
 }) => {
     const [values, setValues] = useState<string[]>(values_ || []);
     const [activated_list, setActivatedList] = useState<boolean[]>(
-        values_?.map(() => true) || []
+        activated_list_ || values_?.map(() => true) || []
     );
     useEffect(() => {
         if (values_ === undefined) return;
         setValues(values_);
-        // onChange?.(values_);
     }, [onChange, values_]);
+    useEffect(() => {
+        setActivatedList(activated_list_ || []);
+    }, [activated_list_]);
 
     const handleActive = useCallback(
         (index: number) => {

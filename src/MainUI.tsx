@@ -4,6 +4,7 @@ import { FC, useCallback, useEffect, useRef, useState } from "react";
 // 导入Ant Design图标组件
 import {
     CloseOutlined,
+    CopyOutlined,
     EllipsisOutlined,
     FileTextFilled,
     InfoCircleFilled,
@@ -43,7 +44,6 @@ import type { JointContent } from "antd/es/message/interface";
 // 导入AI API接口
 import getAPI, { API, type ModelType } from "./AI_API";
 import { v4 as uuid_v4 } from "uuid";
-// import { GetProps } from "antd/lib";
 
 // type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
 
@@ -202,6 +202,7 @@ interface StudentsInfo {
     content: string;
     think_content: string;
     loading: boolean;
+    activated: boolean;
 }
 // 主页组件定义
 const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
@@ -235,7 +236,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const [history, setHistory] = useState<HistorysType>({});
     // 获取主题token
     const { token } = useToken();
-    const students_activated_list_ref = useRef<boolean[]>([]);
 
     useEffect(() => {
         const h = localStorage.getItem("class-history");
@@ -243,6 +243,16 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             setHistory(JSON.parse(h));
         }
     }, []);
+
+    // 拷贝到剪切板
+    const copyToClipboard = useCallback(
+        (text: string) => {
+            // 复制到剪贴板
+            navigator.clipboard.writeText(text);
+            sendMessage("已导出到剪切板.");
+        },
+        [sendMessage]
+    );
 
     // 处理表单提交的回调函数
     const handleSubmit = useCallback(() => {
@@ -391,6 +401,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         content: "",
                         think_content: "",
                         loading: false,
+                        activated: true,
                     };
                 }
                 setStudentsInfo(new_students_info);
@@ -422,7 +433,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 // 成功回调，更新文本区域内容
                 (content, type) => {
                     if (type === null || content === null) return;
-                    // content_form.setFieldValue(["content", index], content);
+
                     switch (type) {
                         case "content":
                             new_content[index].content = content;
@@ -434,6 +445,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             console.warn("未知的type");
                             break;
                     }
+
                     setStudentsInfo(new_content);
                 },
                 // `完成`回调（空函数）
@@ -489,11 +501,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         }
         // 遍历学生列表
         for (const [index] of students.entries()) {
-            if (students_activated_list_ref.current[index]) {
+            if (students_info[index].activated) {
                 handleSingleAIOptimize(index);
             }
         }
-    }, [handleSingleAIOptimize, sendWarning, students]);
+    }, [handleSingleAIOptimize, sendWarning, students, students_info]);
 
     // 加载历史数据
     const handleLoadHistoryData = useCallback(
@@ -978,6 +990,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     {/* 学生列表输入组件 */}
                     <StringListInput
                         values_={students}
+                        activated_list_={Object.values(students_info).map(
+                            (student) => student.activated
+                        )}
                         onChange={(values) => {
                             // 获取班级名称
                             const className =
@@ -991,6 +1006,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     content: "",
                                     think_content: "",
                                     loading: false,
+                                    activated: true,
                                 };
                             }
                             setStudentsInfo(new_students_info);
@@ -1010,10 +1026,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         onClick={(index, value) => {
                             console.log("点击了学生:", index, value);
                         }}
-                        onActive={(_, activated_list) => {
-                            students_activated_list_ref.current = [
-                                ...activated_list,
-                            ];
+                        onActive={(index, activated_list) => {
+                            const new_info = { ...students_info };
+                            new_info[index].activated = activated_list[index];
+                            setStudentsInfo(new_info);
                         }}
                     />
                 </Col>
@@ -1067,6 +1083,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 {/* 学生课堂表现输入框 */}
                                 <Form.Item name={["content", index]}>
                                     <Input.TextArea
+                                        disabled={
+                                            !students_info[index].activated
+                                        }
                                         size="small"
                                         title="填写学生课堂表现关键词"
                                         autoSize={{
@@ -1087,40 +1106,102 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     )
                                 }
                                 {/* ai输出内容 */}
-                                <Collapse
-                                    size="small"
-                                    items={[
-                                        {
-                                            key: `think_${index}`,
-                                            label: "思考",
-                                            children: (
-                                                <Typography.Paragraph type="secondary">
-                                                    {
-                                                        students_info[index]
-                                                            ?.think_content
-                                                    }
-                                                </Typography.Paragraph>
-                                            ),
-                                        },
-                                        {
-                                            key: `content_${index}`,
-                                            label: "内容",
-                                            children: (
-                                                <Typography.Paragraph
-                                                    style={{
-                                                        width: "100%",
-                                                    }}
-                                                >
-                                                    {
-                                                        students_info[index]
-                                                            ?.content
-                                                    }
-                                                </Typography.Paragraph>
-                                            ),
-                                        },
-                                    ]}
-                                    defaultActiveKey={[`content_${index}`]}
-                                />
+                                {students_info[index].activated && (
+                                    <Collapse
+                                        size="small"
+                                        items={[
+                                            {
+                                                key: `think_${index}`,
+                                                label: (
+                                                    <Flex justify="space-between">
+                                                        思考
+                                                        <Button
+                                                            disabled={
+                                                                !students_info[
+                                                                    index
+                                                                ].activated ||
+                                                                students_info[
+                                                                    index
+                                                                ].loading ||
+                                                                students_info[
+                                                                    index
+                                                                ]
+                                                                    .think_content ===
+                                                                    ""
+                                                            }
+                                                            type="link"
+                                                            color="pink"
+                                                            icon={
+                                                                <CopyOutlined />
+                                                            }
+                                                            onClick={() => {
+                                                                copyToClipboard(
+                                                                    students_info[
+                                                                        index
+                                                                    ]
+                                                                        ?.think_content
+                                                                );
+                                                            }}
+                                                        />
+                                                    </Flex>
+                                                ),
+                                                children: (
+                                                    <Typography.Paragraph type="secondary">
+                                                        {
+                                                            students_info[index]
+                                                                ?.think_content
+                                                        }
+                                                    </Typography.Paragraph>
+                                                ),
+                                            },
+                                            {
+                                                key: `content_${index}`,
+                                                label: (
+                                                    <Flex justify="space-between">
+                                                        内容
+                                                        <Button
+                                                            disabled={
+                                                                !students_info[
+                                                                    index
+                                                                ].activated ||
+                                                                students_info[
+                                                                    index
+                                                                ].loading ||
+                                                                students_info[
+                                                                    index
+                                                                ].content === ""
+                                                            }
+                                                            type="link"
+                                                            icon={
+                                                                <CopyOutlined />
+                                                            }
+                                                            onClick={() => {
+                                                                copyToClipboard(
+                                                                    students_info[
+                                                                        index
+                                                                    ]?.content
+                                                                );
+                                                            }}
+                                                        />
+                                                    </Flex>
+                                                ),
+                                                children: (
+                                                    <Typography.Paragraph
+                                                        style={{
+                                                            width: "100%",
+                                                        }}
+                                                    >
+                                                        {
+                                                            students_info[index]
+                                                                ?.content
+                                                        }
+                                                    </Typography.Paragraph>
+                                                ),
+                                            },
+                                        ]}
+                                        defaultActiveKey={[`content_${index}`]}
+                                    />
+                                )}
                             </Card>
                         ))}
                     </Form>
@@ -1175,8 +1256,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         result += "\n\n---\n";
                     }
                     // 复制到剪贴板
-                    navigator.clipboard.writeText(result);
-                    sendMessage("已导出到剪切板.");
+                    copyToClipboard(result);
                 }}
             />
             {/* 设置按钮 - 根据API状态改变样式 */}

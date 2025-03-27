@@ -7,7 +7,6 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import { JointContent } from "antd/es/message/interface";
 import Page from "./Page";
-
 dayjs.locale("en");
 const App: React.FC = () => {
     const [messageApi, contextHolder] = message.useMessage();

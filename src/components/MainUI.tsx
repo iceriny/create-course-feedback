@@ -1,140 +1,52 @@
-// 导入React核心组件和钩子
-import { FC, useCallback, useEffect, useRef, useState } from "react";
-
-// 导入Ant Design图标组件
 import {
     CloseOutlined,
-    CopyOutlined,
     EllipsisOutlined,
     FileTextFilled,
     InfoCircleFilled,
-    LoadingOutlined,
-    ReloadOutlined,
-    SaveOutlined,
     ThunderboltOutlined,
 } from "@ant-design/icons";
-// 导入Ant Design UI组件
 import {
+    Anchor,
     Button,
     Card,
+    Col,
+    ConfigProvider,
     DatePicker,
-    Drawer,
-    Flex,
     FloatButton,
     Form,
     Input,
-    Space,
-    ConfigProvider,
-    theme,
-    Select,
-    Collapse,
-    Typography,
-    Tooltip,
-    Anchor,
     Row,
-    Col,
+    Select,
+    Space,
+    theme,
 } from "antd";
-// 导入自定义组件
-import StringListInput from "./StringListInput";
-
-// 导入日期处理库
-import dayjs from "dayjs";
-// 导入消息接口类型
 import type { JointContent } from "antd/es/message/interface";
-// 导入AI API接口
-import getAPI, { API, type ModelType } from "./AI_API";
+import dayjs from "dayjs";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuid_v4 } from "uuid";
+import getAPI, { API, type ModelType } from "../AI_API";
 
-// type RangePickerProps = GetProps<typeof DatePicker.RangePicker>;
+// 导入子组件
+import StringListInput from "./StringListInput";
+import SettingsDrawer from "./SettingsDrawer";
+import StudentsList from "./StudentsList";
 
-type PromptType = "programming" | "robot";
+// 导入类型
+import {
+    ClassTime,
+    HistorysType,
+    PromptItem,
+    PromptType,
+    StudentsInfo,
+} from "./types";
 
-interface PromptItem {
-    name: string;
-    prompt: string;
-}
-
-type PromptItems = Record<PromptType, PromptItem>;
-
-// AI提示词模板，用于生成课程反馈内容
-const PROMPTS: PromptItems = {
-    programming: {
-        name: "编程",
-        prompt: `## 角色定位：编程教师
-- 你是一位专注于小学和初高中学生编程教育的老师
-- 以下[方括号]内容为重点要求
-
-## 任务说明：
-- 我会提供课程基本信息（课程名称、时间、内容概览、教学目标）
-- 我会提供[单个]学生的课堂表现关键词
-- 请针对这位学生的表现进行[优化扩写]，控制在[150字左右]
-
-## 内容要求：
-- [仅需撰写课堂表现部分]，不要修改其他内容
-- 表现描述需[平衡指出优点和不足]，语气友善且有建设性
-- [重要提醒]：这是发给家长的反馈，请注意家长感受和情绪
-- [禁止添加虚构内容]，不要编造未提及的具体事件（如"某某最先完成..."）
-- 使用[宏观描述]而非具体课堂细节
-- 语言风格[自然口语化]，避免过于正式或官方的表述，要更亲切，接地气
-
-## 输出格式：
-请直接输出课堂表现文本，无需包含任何格式标记或额外内容`,
-    },
-    robot: {
-        name: "机器人",
-        prompt: `## 角色定位：机器人(机械搭建)教师
-- 你是一位专注于小学和初高中学生机器人(机械搭建)的老师
-- 以下[方括号]内容为重点要求
-
-## 任务说明：
-- 我会提供课程基本信息（课程名称、时间、内容概览、教学目标）
-- 我会提供[单个]学生的课堂表现关键词
-- 请针对这位学生的表现进行[优化扩写]，控制在[150字左右]
-
-## 内容要求：
-- [仅需撰写课堂表现部分]，不要修改其他内容
-- 表现描述需[平衡指出优点和不足]，语气友善且有建设性
-- [重要提醒]：这是发给家长的反馈，请注意家长感受和情绪
-- [禁止添加虚构内容]，不要编造未提及的具体事件（如"某某最先完成..."）
-- 使用[宏观描述]而非具体课堂细节
-- 语言风格[自然口语化]，避免过于正式或官方的表述，要更亲切，接地气
-
-## 输出格式：
-请直接输出课堂表现文本，无需包含任何格式标记或额外内容`,
-    },
-} as const;
-
-function getPromptFromLocalStorage(): Record<string, PromptItem> {
-    const prompts = localStorage.getItem("prompts");
-    if (prompts) {
-        return JSON.parse(prompts) as PromptItems;
-    }
-    return {};
-}
-function savePromptToLocalStorage(prompts: Record<string, PromptItem>) {
-    const _t: Record<string, PromptItem> = {};
-    for (const [key, item] of Object.entries(prompts)) {
-        if (key in PROMPTS) {
-            continue;
-        }
-        _t[key] = item;
-    }
-    localStorage.setItem("prompts", JSON.stringify(prompts));
-}
-
-//  `## 你是一个编程老师, 主要教小学和初高中的同学学习编程.
-// - 下文中标记[something]的内容是重点需要注意的内容
-// ### 现在有一个任务:
-// - 我{user}提供你基本信息, 具体为课程名, 时间, 课程内容, 教学目标.
-// - 还会给你[单个]学生的课堂表现, 请你针对这个同学的课堂表现内容[优化]扩写, [大约150字].
-// - [其中课堂表现是你唯一要写的内容].
-// - [在写课堂表现时候, 要指出优点, 表明缺点, 并且要注意语气和礼貌.]
-// - [请记住!!这是给家长提供的课程反馈, 一定要注意到家长的情绪.]
-// - [禁止出现额外的你自己猜想的\`剧情\`, 不要编写没有明确存在的具体事件, 比如\`某某在xxx最先...\`这样的内容]
-// - [请用更通用和宏观的语言表述问题,而非展示课堂细节.]
-// - [请不要用太正式官方的语气, 要更口语化, 接地气一点.]
-
-// ## 请仅仅回复课程反馈的正文部分, 不包括其任何无关的格式或内容.`;
+// 导入常量和工具函数
+import { PROMPTS } from "./constants";
+import {
+    addToLocalStorageArray,
+    getLocalStorage,
+    getPromptFromLocalStorage,
+} from "./utils";
 
 // 定义课程反馈模板，{{courseFeedback}}为占位符
 let template = "{{courseFeedback}}";
@@ -161,50 +73,9 @@ interface MainUIProps {
 // 从theme中解构出useToken钩子
 const { useToken } = theme;
 
-// 在LocalStorage中的 数组数据 增量添加数据
-function addToLocalStorageArray(key: string, ...values: string[]) {
-    // 从本地存储中获取数组
-    const array: string[] = JSON.parse(localStorage.getItem(key) ?? "[]");
-    // 如果数组中已经存在该值，则不添加
-    for (const value of values) {
-        if (array.includes(value)) continue;
-        // 向数组中添加新值
-        array.push(value);
-    }
-    // 将数组保存到本地存储
-    localStorage.setItem(key, JSON.stringify(array));
-    return array;
-}
-
-interface HistoryType {
-    courseName: string;
-    courseContents: string[];
-    courseObjectives: string[];
-}
-interface HistorysType {
-    [key: string]: HistoryType;
-}
-
-// 获取LocalStorage中的 数组数据
-function getLocalStorage<T>(key: string) {
-    const array = JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
-    return array;
-}
-
-interface ClassTime {
-    readonly time: {
-        readonly first: string;
-        readonly last: string;
-    };
-}
-interface StudentsInfo {
-    name: string;
-    content: string;
-    think_content: string;
-    loading: boolean;
-    activated: boolean;
-}
-// 主页组件定义
+/**
+ * 主页组件
+ */
 const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 创建课程信息表单实例
     const [class_form] = Form.useForm();
@@ -310,22 +181,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             const { courseName: _courseName } = new_history[key];
             Already_Existing_Names.add(_courseName);
         }
-        console.debug(
-            "Existing course names:",
-            Already_Existing_Names,
-            "courseName: ",
-            courseName,
-            "Has: ",
-            Already_Existing_Names.has(courseName)
-        );
+
         if (Already_Existing_Names.has(courseName)) {
-            console.debug(
-                `Course name "${courseName}" already exists in history. Updating...`
-            );
             for (const key in new_history) {
                 const { courseName: _courseName } = new_history[key];
                 if (_courseName === courseName) {
-                    console.debug(`Updating course with key: ${key}`);
                     new_history[key] = {
                         courseName,
                         courseContents: data.get("course-contents"),
@@ -335,7 +195,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             }
         } else {
             const newKey = uuid_v4();
-            console.debug(`Adding new course with key: ${newKey}`);
             new_history[newKey] = {
                 courseName,
                 courseContents: data.get("course-contents"),
@@ -425,52 +284,70 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 处理单次AI调用
     const handleSingleAIOptimize = useCallback(
         (index: number) => {
-            const new_content = { ...students_info };
-            new_content[index].loading = true;
-            setStudentsInfo(new_content);
+            // 创建一个对象更新函数，避免更新整个students_info对象
+            setStudentsInfo((prevInfo) => {
+                const updatedInfo = { ...prevInfo };
+                updatedInfo[index] = {
+                    ...updatedInfo[index],
+                    loading: true,
+                };
+                return updatedInfo;
+            });
+
             // 调用AI API发送消息
             getAPI().sendMessage(
                 // 成功回调，更新文本区域内容
                 (content, type) => {
                     if (type === null || content === null) return;
 
-                    switch (type) {
-                        case "content":
-                            new_content[index].content = content;
-                            break;
-                        case "reasoning_content":
-                            new_content[index].think_content = content;
-                            break;
-                        default:
-                            console.warn("未知的type");
-                            break;
-                    }
+                    // 使用函数式更新，只更新特定学生的内容
+                    setStudentsInfo((prevInfo) => {
+                        const updatedInfo = { ...prevInfo };
 
-                    setStudentsInfo(new_content);
+                        switch (type) {
+                            case "content":
+                                updatedInfo[index] = {
+                                    ...updatedInfo[index],
+                                    content: content,
+                                };
+                                break;
+                            case "reasoning_content":
+                                updatedInfo[index] = {
+                                    ...updatedInfo[index],
+                                    think_content: content,
+                                };
+                                break;
+                            default:
+                                console.warn("未知的type");
+                                break;
+                        }
+
+                        return updatedInfo;
+                    });
                 },
-                // `完成`回调（空函数）
+                // `完成`回调
                 () => {
-                    const new_content = { ...students_info };
-                    console.log(
-                        "key: ",
-                        index,
-                        "value: ",
-                        new_content[index].content
-                    );
-                    let _content = new_content[index].content.replace(
-                        /(?:(?:\*\*)?课堂表现.*?(?::|：)(?:\*\*)?)(?::|：)?/,
-                        ""
-                    );
-                    _content = _content.replace(
-                        /\d{4}年 ?\d{1,2}月\d{1,2}(?:日|天)/,
-                        ""
-                    );
-                    _content = _content.replace(/哆啦人工智能小栈/, "");
-                    _content = _content.trim();
-                    console.log("NEW:   key: ", index, "value: ", _content);
-                    new_content[index].content = _content;
-                    new_content[index].loading = false;
-                    setStudentsInfo(new_content);
+                    setStudentsInfo((prevInfo) => {
+                        const updatedInfo = { ...prevInfo };
+                        let _content = updatedInfo[index].content.replace(
+                            /(?:(?:\*\*)?课堂表现.*?(?::|：)(?:\*\*)?)(?::|：)?/,
+                            ""
+                        );
+                        _content = _content.replace(
+                            /\d{4}年 ?\d{1,2}月\d{1,2}(?:日|天)/,
+                            ""
+                        );
+                        _content = _content.replace(/哆啦人工智能小栈/, "");
+                        _content = _content.trim();
+
+                        updatedInfo[index] = {
+                            ...updatedInfo[index],
+                            content: _content,
+                            loading: false,
+                        };
+
+                        return updatedInfo;
+                    });
                 },
                 // 系统提示词
                 { content: promptItems[promptKey].prompt, role: "system" },
@@ -486,7 +363,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 }
             );
         },
-        [content_form, promptItems, promptKey, students, students_info]
+        [content_form, promptItems, promptKey, students]
     );
 
     // 处理AI优化学生课堂表现的回调函数
@@ -512,7 +389,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         (key: string) => {
             const data = history[key];
             if (data) {
-                // TODO: 加载数据到 class_form
                 class_form.setFieldsValue({
                     "course-name": data.courseName,
                     "course-contents": data.courseContents,
@@ -526,173 +402,19 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     return (
         <>
             {/* 设置抽屉 */}
-            <Drawer
-                title="设置"
-                onClose={() => {
-                    setOpen(false);
-                }}
+            <SettingsDrawer
                 open={open}
-            >
-                <Flex vertical gap={20}>
-                    {/* 选择AI模型 */}
-                    <Flex gap={5} align="center" justify="space-between">
-                        <Typography.Text>模型:</Typography.Text>
-                        <Select
-                            style={{ width: "85%" }}
-                            value={model}
-                            options={API.model_list.map((model) => ({
-                                value: model,
-                                label: model,
-                            }))}
-                            onSelect={(value) => {
-                                setModel(value);
-                                API.setModel(value);
-                            }}
-                        />
-                    </Flex>
-                    {/* API Key输入框 */}
-                    <Input
-                        addonBefore="请输入API Key"
-                        placeholder={
-                            API.tokenReady() ? API.getMackToken() : "请输入"
-                        }
-                        onChange={(event) => {
-                            const api_key = event.target.value.trim();
-                            API.setToken(api_key);
-                            localStorage.setItem("api_key", api_key);
-                            sendMessage(
-                                "API Key设置成功, 请刷新页面加载可用模型."
-                            );
-                        }}
-                    />
-                    {/* 提示词自定义输入框 */}
-                    <Flex vertical gap={5} justify="space-between">
-                        <Flex align="center" justify="space-between">
-                            <Typography.Text>提示词:</Typography.Text>
-                            <Tooltip title="选择模板">
-                                {/* <Button
-                                    type="link"
-                                    icon={<ReloadOutlined />}
-                                    onClick={() => {
-                                        setPrompt(PROMPT);
-                                    }}
-                                /> */}
-                                <Select
-                                    style={{ width: "30%" }}
-                                    defaultValue={
-                                        "programming" as PromptType | "custom"
-                                    }
-                                    options={[
-                                        ...Object.entries(promptItems).map(
-                                            (prompt) => ({
-                                                value: prompt[0],
-                                                label: prompt[1].name,
-                                            })
-                                        ),
-                                        {
-                                            value: "custom",
-                                            label: "自定义",
-                                        },
-                                    ]}
-                                    onSelect={(value) => {
-                                        if (value === "custom") {
-                                            const uid: string = uuid_v4();
-                                            setPromptItems({
-                                                ...promptItems,
-                                                [uid]: {
-                                                    name: "请输入提示词名称",
-                                                    prompt: promptItems[
-                                                        promptKey
-                                                    ].prompt,
-                                                },
-                                            });
-                                            setPromptKey(uid as PromptType);
-                                        } else {
-                                            setPromptKey(value);
-                                        }
-                                    }}
-                                />
-                            </Tooltip>
-                        </Flex>
-                        {/* 自定义提示词名称 */}
-                        <Input
-                            addonBefore="名称"
-                            addonAfter={
-                                <Flex gap={20}>
-                                    <CloseOutlined
-                                        style={{
-                                            fontSize: token.controlHeightXS,
-                                            color:
-                                                promptKey in PROMPTS
-                                                    ? undefined
-                                                    : token.colorError,
-                                        }}
-                                        onClick={() => {
-                                            const _t = { ...promptItems };
-                                            delete _t[promptKey];
-                                            setPromptKey(
-                                                Object.keys(
-                                                    promptItems
-                                                )[0] as PromptType
-                                            );
-                                            setPromptItems(_t);
+                setOpen={setOpen}
+                model={model}
+                setModel={setModel}
+                promptItems={promptItems}
+                setPromptItems={setPromptItems}
+                promptKey={promptKey}
+                setPromptKey={setPromptKey}
+                sendMessage={sendMessage}
+            />
 
-                                            savePromptToLocalStorage(_t);
-                                        }}
-                                    />
-                                    <SaveOutlined
-                                        style={{
-                                            fontSize: token.controlHeightXS,
-                                            color:
-                                                promptKey in PROMPTS
-                                                    ? undefined
-                                                    : token.colorPrimary,
-                                        }}
-                                        onClick={() => {
-                                            savePromptToLocalStorage(
-                                                promptItems
-                                            );
-                                        }}
-                                    />
-                                </Flex>
-                            }
-                            value={promptItems[promptKey].name}
-                            disabled={promptKey in PROMPTS}
-                            onChange={(event) => {
-                                const value = event.target.value;
-                                const old_items = {
-                                    ...promptItems,
-                                    [promptKey]: {
-                                        ...promptItems[promptKey],
-                                        name: value,
-                                    },
-                                };
-                                setPromptItems(old_items);
-                            }}
-                        />
-                        {/* 提示词内容 */}
-                        <Input.TextArea
-                            disabled={promptKey in PROMPTS}
-                            value={promptItems[promptKey].prompt}
-                            autoSize={{ minRows: 10, maxRows: 15 }}
-                            title="提示语"
-                            onChange={(event) => {
-                                const value = event.target.value;
-                                const old_items = {
-                                    ...promptItems,
-                                    [promptKey]: {
-                                        ...promptItems[promptKey],
-                                        prompt: value,
-                                    },
-                                };
-                                setPromptItems(old_items);
-                            }}
-                        />
-                    </Flex>
-                </Flex>
-            </Drawer>
             {/* 主体内容 */}
-            {/* 课程信息表单 */}
             <Row gutter={[72, 64]}>
                 <Col span={2} />
                 <Col span={16}>
@@ -730,6 +452,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             actions={[
                                 // 提交按钮
                                 <Button
+                                    key="submit"
                                     style={{ width: "100%" }}
                                     type="link"
                                     htmlType="submit"
@@ -737,12 +460,17 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     提交
                                 </Button>,
                                 // AI优化按钮
-                                <Button type="link" onClick={handleAIOptimize}>
+                                <Button
+                                    key="ai"
+                                    type="link"
+                                    onClick={handleAIOptimize}
+                                >
                                     <ThunderboltOutlined />
                                     AI 优化
                                 </Button>,
                                 // 导入按钮
                                 <Button
+                                    key="import"
                                     style={{ width: "100%" }}
                                     type="link"
                                     onClick={handleImport}
@@ -750,7 +478,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     导入
                                 </Button>,
                             ]}
-                            // TODO: 完成卡片折叠 extra={}
                         >
                             {/* 班级名 表单项 */}
                             <Form.Item
@@ -828,13 +555,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 <RangePicker
                                     showTime={{ format: "HH:mm" }}
                                     format="YYYY-MM-DD HH:mm"
-                                    onChange={(value, dateString) => {
-                                        console.log("Selected Time: ", value);
-                                        console.log(
-                                            "Formatted Selected Time: ",
-                                            dateString
-                                        );
-                                    }}
                                 />
                             </Form.Item>
                             {/* 课程内容表单项 */}
@@ -1027,9 +747,14 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             console.log("点击了学生:", index, value);
                         }}
                         onActive={(index, activated_list) => {
-                            const new_info = { ...students_info };
-                            new_info[index].activated = activated_list[index];
-                            setStudentsInfo(new_info);
+                            setStudentsInfo((prevInfo) => {
+                                const updatedInfo = { ...prevInfo };
+                                updatedInfo[index] = {
+                                    ...updatedInfo[index],
+                                    activated: activated_list[index],
+                                };
+                                return updatedInfo;
+                            });
                         }}
                     />
                 </Col>
@@ -1038,172 +763,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 <Col span={16}>
                     {/* 学生内容表单 */}
                     <Form form={content_form} name="student-content">
-                        {/* 遍历学生列表生成内容卡片 */}
-                        {students.map((student, index) => (
-                            <Card
-                                id={`student-content-${index}`}
-                                style={{
-                                    marginBottom: "2rem",
-                                    boxShadow:
-                                        "10px 10px 20px 10px rgba(0, 0, 0, 0.05)",
-                                }}
-                                key={index}
-                                size="small"
-                                title={
-                                    <Flex justify="space-between">
-                                        <Typography.Text>
-                                            <span
-                                                style={{
-                                                    marginRight: "20px",
-                                                }}
-                                            >
-                                                {index + 1}
-                                            </span>
-                                            {student}
-                                        </Typography.Text>
-                                        <Button
-                                            type="link"
-                                            style={{ marginLeft: "3rem" }}
-                                            size="small"
-                                            icon={<ReloadOutlined />}
-                                            onClick={() => {
-                                                handleSingleAIOptimize(index);
-                                            }}
-                                            disabled={
-                                                students_info[index].content
-                                                    .length === 0 ||
-                                                students_info[index].loading
-                                            }
-                                        >
-                                            重新生成
-                                        </Button>
-                                    </Flex>
-                                }
-                            >
-                                {/* 学生课堂表现输入框 */}
-                                <Form.Item name={["content", index]}>
-                                    <Input.TextArea
-                                        disabled={
-                                            !students_info[index].activated
-                                        }
-                                        size="small"
-                                        title="填写学生课堂表现关键词"
-                                        autoSize={{
-                                            minRows: 1,
-                                            maxRows: 12,
-                                        }}
-                                    />
-                                </Form.Item>
-
-                                {
-                                    // 加载动画
-                                    students_info[index]?.loading && (
-                                        <LoadingOutlined
-                                            style={{
-                                                color: token.colorPrimary,
-                                            }}
-                                        />
-                                    )
-                                }
-                                {/* ai输出内容 */}
-                                {students_info[index].activated && (
-                                    <Collapse
-                                        size="small"
-                                        items={[
-                                            {
-                                                key: `think_${index}`,
-                                                label: (
-                                                    <Flex justify="space-between">
-                                                        思考
-                                                        <Button
-                                                            disabled={
-                                                                !students_info[
-                                                                    index
-                                                                ].activated ||
-                                                                students_info[
-                                                                    index
-                                                                ].loading ||
-                                                                students_info[
-                                                                    index
-                                                                ]
-                                                                    .think_content ===
-                                                                    ""
-                                                            }
-                                                            type="link"
-                                                            color="pink"
-                                                            icon={
-                                                                <CopyOutlined />
-                                                            }
-                                                            onClick={() => {
-                                                                copyToClipboard(
-                                                                    students_info[
-                                                                        index
-                                                                    ]
-                                                                        ?.think_content
-                                                                );
-                                                            }}
-                                                        />
-                                                    </Flex>
-                                                ),
-                                                children: (
-                                                    <Typography.Paragraph type="secondary">
-                                                        {
-                                                            students_info[index]
-                                                                ?.think_content
-                                                        }
-                                                    </Typography.Paragraph>
-                                                ),
-                                            },
-                                            {
-                                                key: `content_${index}`,
-                                                label: (
-                                                    <Flex justify="space-between">
-                                                        内容
-                                                        <Button
-                                                            disabled={
-                                                                !students_info[
-                                                                    index
-                                                                ].activated ||
-                                                                students_info[
-                                                                    index
-                                                                ].loading ||
-                                                                students_info[
-                                                                    index
-                                                                ].content === ""
-                                                            }
-                                                            type="link"
-                                                            icon={
-                                                                <CopyOutlined />
-                                                            }
-                                                            onClick={() => {
-                                                                copyToClipboard(
-                                                                    students_info[
-                                                                        index
-                                                                    ]?.content
-                                                                );
-                                                            }}
-                                                        />
-                                                    </Flex>
-                                                ),
-                                                children: (
-                                                    <Typography.Paragraph
-                                                        style={{
-                                                            width: "100%",
-                                                        }}
-                                                    >
-                                                        {
-                                                            students_info[index]
-                                                                ?.content
-                                                        }
-                                                    </Typography.Paragraph>
-                                                ),
-                                            },
-                                        ]}
-                                        defaultActiveKey={[`content_${index}`]}
-                                    />
-                                )}
-                            </Card>
-                        ))}
+                        {/* 使用优化后的学生列表组件 */}
+                        <StudentsList
+                            students={students}
+                            students_info={students_info}
+                            handleSingleAIOptimize={handleSingleAIOptimize}
+                            copyToClipboard={copyToClipboard}
+                        />
                     </Form>
                 </Col>
                 {/* 侧边锚点 */}
@@ -1289,4 +855,5 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         </>
     );
 };
+
 export default MainUI;

@@ -1,7 +1,7 @@
 import { Flex, Layout, theme } from "antd";
-import { FC } from "react";
-import MainUI from "./MainUI";
 import { JointContent } from "antd/es/message/interface";
+import { FC } from "react";
+import { MainUI } from "./components";
 import Logo from "./Icon";
 
 const { Header, Footer, Content } = Layout;

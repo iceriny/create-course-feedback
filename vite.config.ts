@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import svgr from "vite-plugin-svgr";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -9,7 +10,7 @@ const packageJson = JSON.parse(
 
 // https://vite.dev/config/
 export default defineConfig({
-    plugins: [react()],
+    plugins: [react(), svgr({ svgrOptions: { icon: true } })],
     base: "/",
     define: {
         __APP_VERSION__: JSON.stringify(packageJson.version),

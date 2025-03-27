@@ -2,6 +2,7 @@ import { Flex, Layout, theme } from "antd";
 import { FC } from "react";
 import MainUI from "./MainUI";
 import { JointContent } from "antd/es/message/interface";
+import Logo from "./Icon";
 
 const { Header, Footer, Content } = Layout;
 
@@ -26,7 +27,10 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     const { token } = useToken();
     return (
         <Layout style={{ minHeight: "100vh" }}>
-            <Header style={{ fontSize: "1.5rem" }}>课程反馈生成器</Header>
+            <Header style={{ fontSize: "1.5rem" }}>
+                <Logo />
+                课程反馈生成器
+            </Header>
             <Content style={{ padding: "50px 50px" }}>
                 <MainUI sendMessage={sendMessage} sendWarning={sendWarning} />
             </Content>

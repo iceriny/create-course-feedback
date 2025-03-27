@@ -22,14 +22,22 @@ import {
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
 import dayjs from "dayjs";
-import { FC, useCallback, useEffect, useRef, useState } from "react";
+import {
+    FC,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    lazy,
+    Suspense,
+} from "react";
 import { v4 as uuid_v4 } from "uuid";
 import getAPI, { API, type ModelType } from "../AI_API";
 
 // 导入子组件
-import StringListInput from "./StringListInput";
-import SettingsDrawer from "./SettingsDrawer";
-import StudentsList from "./StudentsList";
+const StringListInput = lazy(() => import("./StringListInput"));
+const SettingsDrawer = lazy(() => import("./SettingsDrawer"));
+const StudentsList = lazy(() => import("./StudentsList"));
 
 // 导入类型
 import {
@@ -73,6 +81,21 @@ interface MainUIProps {
 // 从theme中解构出useToken钩子
 const { useToken } = theme;
 
+// 修改预加载函数，确保组件正确初始化
+const preloadComponents = () => {
+    // 预加载所有懒加载组件
+    const promises = [
+        import("./StringListInput"),
+        import("./SettingsDrawer"),
+        import("./StudentsList"),
+    ];
+
+    // 不关心结果，只是为了预加载
+    Promise.all(promises).catch((error) => {
+        console.error("组件预加载失败:", error);
+    });
+};
+
 /**
  * 主页组件
  */
@@ -108,11 +131,19 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 获取主题token
     const { token } = useToken();
 
+    // 修改useEffect中的预加载代码，确保在正确的时机加载
     useEffect(() => {
         const h = localStorage.getItem("class-history");
         if (h) {
             setHistory(JSON.parse(h));
         }
+
+        // 确保DOM已经渲染
+        const timer = setTimeout(() => {
+            preloadComponents();
+        }, 1000);
+
+        return () => clearTimeout(timer);
     }, []);
 
     // 拷贝到剪切板
@@ -402,17 +433,19 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     return (
         <>
             {/* 设置抽屉 */}
-            <SettingsDrawer
-                open={open}
-                setOpen={setOpen}
-                model={model}
-                setModel={setModel}
-                promptItems={promptItems}
-                setPromptItems={setPromptItems}
-                promptKey={promptKey}
-                setPromptKey={setPromptKey}
-                sendMessage={sendMessage}
-            />
+            <Suspense fallback={<div>加载中...</div>}>
+                <SettingsDrawer
+                    open={open}
+                    setOpen={setOpen}
+                    model={model}
+                    setModel={setModel}
+                    promptItems={promptItems}
+                    setPromptItems={setPromptItems}
+                    promptKey={promptKey}
+                    setPromptKey={setPromptKey}
+                    sendMessage={sendMessage}
+                />
+            </Suspense>
 
             {/* 主体内容 */}
             <Row gutter={[72, 64]}>
@@ -708,55 +741,57 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 </Col>
                 <Col span={6}>
                     {/* 学生列表输入组件 */}
-                    <StringListInput
-                        values_={students}
-                        activated_list_={Object.values(students_info).map(
-                            (student) => student.activated
-                        )}
-                        onChange={(values) => {
-                            // 获取班级名称
-                            const className =
-                                class_form.getFieldValue("class-name");
-                            if (!className) return;
-                            // 为新增学生初始化内容
-                            const new_students_info = { ...students_info };
-                            for (const [index, value] of values.entries()) {
-                                new_students_info[index] = {
-                                    name: value,
-                                    content: "",
-                                    think_content: "",
-                                    loading: false,
-                                    activated: true,
-                                };
-                            }
-                            setStudentsInfo(new_students_info);
-                            // 更新学生列表状态
-                            setStudents(values);
-                            // 保存学生列表到本地存储
-                            localStorage.setItem(
-                                `${className}_std`,
-                                JSON.stringify(values)
-                            );
-                        }}
-                        onClear={() => {
-                            // 清空学生内容引用和学生列表
-                            setStudentsInfo({});
-                            setStudents([]);
-                        }}
-                        onClick={(index, value) => {
-                            console.log("点击了学生:", index, value);
-                        }}
-                        onActive={(index, activated_list) => {
-                            setStudentsInfo((prevInfo) => {
-                                const updatedInfo = { ...prevInfo };
-                                updatedInfo[index] = {
-                                    ...updatedInfo[index],
-                                    activated: activated_list[index],
-                                };
-                                return updatedInfo;
-                            });
-                        }}
-                    />
+                    <Suspense fallback={<div>加载中...</div>}>
+                        <StringListInput
+                            values_={students}
+                            activated_list_={Object.values(students_info).map(
+                                (student) => student.activated
+                            )}
+                            onChange={(values) => {
+                                // 获取班级名称
+                                const className =
+                                    class_form.getFieldValue("class-name");
+                                if (!className) return;
+                                // 为新增学生初始化内容
+                                const new_students_info = { ...students_info };
+                                for (const [index, value] of values.entries()) {
+                                    new_students_info[index] = {
+                                        name: value,
+                                        content: "",
+                                        think_content: "",
+                                        loading: false,
+                                        activated: true,
+                                    };
+                                }
+                                setStudentsInfo(new_students_info);
+                                // 更新学生列表状态
+                                setStudents(values);
+                                // 保存学生列表到本地存储
+                                localStorage.setItem(
+                                    `${className}_std`,
+                                    JSON.stringify(values)
+                                );
+                            }}
+                            onClear={() => {
+                                // 清空学生内容引用和学生列表
+                                setStudentsInfo({});
+                                setStudents([]);
+                            }}
+                            onClick={(index, value) => {
+                                console.log("点击了学生:", index, value);
+                            }}
+                            onActive={(index, activated_list) => {
+                                setStudentsInfo((prevInfo) => {
+                                    const updatedInfo = { ...prevInfo };
+                                    updatedInfo[index] = {
+                                        ...updatedInfo[index],
+                                        activated: activated_list[index],
+                                    };
+                                    return updatedInfo;
+                                });
+                            }}
+                        />
+                    </Suspense>
                 </Col>
 
                 <Col span={2} />
@@ -764,12 +799,14 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     {/* 学生内容表单 */}
                     <Form form={content_form} name="student-content">
                         {/* 使用优化后的学生列表组件 */}
-                        <StudentsList
-                            students={students}
-                            students_info={students_info}
-                            handleSingleAIOptimize={handleSingleAIOptimize}
-                            copyToClipboard={copyToClipboard}
-                        />
+                        <Suspense fallback={<div>加载中...</div>}>
+                            <StudentsList
+                                students={students}
+                                students_info={students_info}
+                                handleSingleAIOptimize={handleSingleAIOptimize}
+                                copyToClipboard={copyToClipboard}
+                            />
+                        </Suspense>
                     </Form>
                 </Col>
                 {/* 侧边锚点 */}

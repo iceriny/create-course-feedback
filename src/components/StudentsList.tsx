@@ -8,6 +8,7 @@ interface StudentsListProps {
     students_info: { [key: number]: StudentsInfo };
     handleSingleAIOptimize: (index: number) => void;
     copyToClipboard: (text: string) => void;
+    copyStudentWithTemplate: (index: number) => void;
 }
 
 /**
@@ -19,6 +20,7 @@ const StudentsList = memo(
         students_info,
         handleSingleAIOptimize,
         copyToClipboard,
+        copyStudentWithTemplate,
     }: StudentsListProps) => {
         return (
             <>
@@ -30,6 +32,7 @@ const StudentsList = memo(
                         studentInfo={students_info[index]}
                         handleSingleAIOptimize={handleSingleAIOptimize}
                         copyToClipboard={copyToClipboard}
+                        copyStudentWithTemplate={copyStudentWithTemplate}
                     />
                 ))}
             </>

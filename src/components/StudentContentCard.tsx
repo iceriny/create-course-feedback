@@ -22,6 +22,7 @@ interface StudentContentCardProps {
     studentInfo: StudentsInfo;
     handleSingleAIOptimize: (index: number) => void;
     copyToClipboard: (text: string) => void;
+    copyStudentWithTemplate: (index: number) => void;
 }
 
 /**
@@ -34,6 +35,7 @@ const StudentContentCard = memo(
         studentInfo,
         handleSingleAIOptimize,
         copyToClipboard,
+        copyStudentWithTemplate,
     }: StudentContentCardProps) => {
         const { token } = useToken();
 
@@ -58,18 +60,34 @@ const StudentContentCard = memo(
                             </span>
                             {student}
                         </Typography.Text>
-                        <Button
-                            type="link"
-                            style={{ marginLeft: "3rem" }}
-                            size="small"
-                            icon={<ReloadOutlined />}
-                            onClick={() => {
-                                handleSingleAIOptimize(index);
+                        <div
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
                             }}
-                            disabled={studentInfo.loading}
                         >
-                            重新或单独生成
-                        </Button>
+                            <Button
+                                type="link"
+                                style={{ marginLeft: "1rem" }}
+                                size="small"
+                                icon={<ReloadOutlined />}
+                                onClick={() => {
+                                    handleSingleAIOptimize(index);
+                                }}
+                                disabled={studentInfo.loading}
+                            >
+                                重新或单独生成
+                            </Button>
+                            <CopyButton
+                                disabled={
+                                    !studentInfo.activated ||
+                                    studentInfo.loading
+                                }
+                                onClick={() => {
+                                    copyStudentWithTemplate(index);
+                                }}
+                            />
+                        </div>
                     </Flex>
                 }
             >

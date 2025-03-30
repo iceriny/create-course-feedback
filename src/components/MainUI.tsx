@@ -1,5 +1,6 @@
 import {
     CloseOutlined,
+    EditOutlined,
     EllipsisOutlined,
     FileTextFilled,
     InfoCircleFilled,
@@ -41,6 +42,7 @@ import getAPI, { API, type ModelType } from "../AI_API";
 const StringListInput = lazy(() => import("./StringListInput"));
 const SettingsDrawer = lazy(() => import("./SettingsDrawer"));
 const StudentsList = lazy(() => import("./StudentsList"));
+const TemplateEditor = lazy(() => import("./TemplateEditor"));
 
 // 导入类型
 import {
@@ -57,10 +59,40 @@ import {
     addToLocalStorageArray,
     getLocalStorage,
     getPromptFromLocalStorage,
+    replaceTemplate,
 } from "./utils";
 
+// 定义默认模板
+const DEFAULT_TEMPLATE = `**课程名称:** {{courseName}}
+
+**授课时间:** {{courseTime}}
+
+**课程内容概览:**
+{{courseContents}}
+
+**教学目标:**
+{{courseObjectives}}
+
+**课堂表现:**
+{{courseFeedback}}
+
+{{signature}}
+{{currentDate}}`;
+
 // 定义课程反馈模板，{{courseFeedback}}为占位符
-let template = "{{courseFeedback}}";
+const AI_TEMPLATE = `**课程名称:** {{courseName}}
+
+**授课时间:** {{courseTime}}
+
+**课程内容概览:**
+{{courseContents}}
+
+**教学目标:**
+{{courseObjectives}}`;
+
+// let template = DEFAULT_TEMPLATE;
+// 定义可用的占位符
+// const PLACEHOLDERS = {...};
 
 // 从DatePicker组件中解构出RangePicker组件
 const { RangePicker } = DatePicker;
@@ -137,12 +169,31 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const [isThrottled, setIsThrottled] = useState(false);
     // 节流消息
     const [throttleMessage, setThrottleMessage] = useState("");
+    // 模板相关状态
+    const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false);
+    const [customTemplate, setCustomTemplate] = useState(DEFAULT_TEMPLATE);
+    const [exportTemplate, setExportTemplate] = useState(DEFAULT_TEMPLATE);
+    // 使用ref而不是state存储AI模板，因为它对UI不可见
+    const aiTemplateRef = useRef(AI_TEMPLATE);
+    const [signature, setSignature] = useState("哆啦人工智能小栈");
 
     // 修改useEffect中的预加载代码，确保在正确的时机加载
     useEffect(() => {
         const h = localStorage.getItem("class-history");
         if (h) {
             setHistory(JSON.parse(h));
+        }
+
+        // 加载保存的模板和签名
+        const savedTemplate = localStorage.getItem("feedback-template");
+        if (savedTemplate) {
+            setCustomTemplate(savedTemplate);
+            setExportTemplate(savedTemplate);
+        }
+
+        const savedSignature = localStorage.getItem("signature");
+        if (savedSignature) {
+            setSignature(savedSignature);
         }
 
         // 确保DOM已经渲染
@@ -195,18 +246,28 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             .map((item: { item: string }) => `- ${item.item}\n`) as string[];
         // 获取课程时间范围
         const time = data.get("course-time") as [dayjs.Dayjs, dayjs.Dayjs];
-        // 构建课程反馈模板
-        template =
-            `**课程名称:**《${courseName}》\n\n` +
-            `**授课时间:** @${time[0].format(
-                "YYYY[年] MM[月]DD[日] HH:mm"
-            )} -> ${time[1].format("HH:mm")}\n\n` +
-            `**课程内容概览:**\n${courseContents.join("")}\n` +
-            `**教学目标:**\n${courseObjectives.join("")}\n` +
-            "**课堂表现:**\n" +
-            "{{courseFeedback}}\n\n" +
-            "哆啦人工智能小栈\n" +
-            `${dayjs().format("YYYY[年] MM[月]DD[日]")}`;
+
+        // 使用封装的替换函数处理模板
+        const processedTemplate = replaceTemplate(customTemplate, {
+            courseName,
+            courseTime: time,
+            courseContents,
+            courseObjectives,
+            signature,
+        });
+
+        setExportTemplate(processedTemplate);
+
+        // 为AI调用准备模板
+        const aiProcessedTemplate = replaceTemplate(AI_TEMPLATE, {
+            courseName,
+            courseTime: time,
+            courseContents,
+            courseObjectives,
+        });
+
+        // 使用ref存储AI模板
+        aiTemplateRef.current = aiProcessedTemplate;
 
         // 保存班级数据到本地存储
         const saveData: ClassTime = {
@@ -265,7 +326,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
         // 添加提交成功的反馈
         sendMessage("课程信息提交成功！");
-    }, [class_form, history, sendMessage]);
+    }, [class_form, history, sendMessage, customTemplate, signature]);
 
     // 导入班级数据
     const importClass = useCallback(
@@ -403,7 +464,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 // 系统提示词
                 { content: promptItems[promptKey].prompt, role: "system" },
                 // 课程模板
-                { content: template, role: "user" },
+                { content: aiTemplateRef.current, role: "user" },
                 // 学生姓名
                 { content: `学员姓名: ${students[index]}`, role: "user" },
                 // 学生课堂表现原始内容
@@ -450,6 +511,83 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         [class_form, history]
     );
 
+    // 复制单个学生内容（带模板）
+    const handleCopyStudentWithTemplate = useCallback(
+        (index: number) => {
+            // 获取表单数据
+            const data = class_form.getFieldsValue();
+            // 添加get方法以便获取表单字段值
+            const get = (key: string) => data[key];
+
+            // 获取课程名称
+            const courseName = get("course-name") as string;
+
+            // 获取课程内容并格式化为列表
+            const courseContents =
+                get("course-contents")?.map(
+                    (item: { item: string }) => `- ${item.item}\n`
+                ) || [];
+
+            // 获取教学目标并格式化为列表
+            const courseObjectives =
+                get("course-objectives")?.map(
+                    (item: { item: string }) => `- ${item.item}\n`
+                ) || [];
+
+            // 获取课程时间范围
+            const time = get("course-time") as
+                | [dayjs.Dayjs, dayjs.Dayjs]
+                | undefined;
+
+            // 获取学生名称
+            const student = students[index];
+
+            // 添加学生标题
+            let result = `### ${student}\n`;
+
+            // 使用封装的替换函数处理模板
+            const studentTemplate = replaceTemplate(exportTemplate, {
+                courseName,
+                courseTime: time,
+                courseContents,
+                courseObjectives,
+                signature,
+                courseFeedback: students_info[index]?.content || "",
+            });
+
+            result += studentTemplate;
+
+            // 复制到剪贴板
+            copyToClipboard(result);
+        },
+        [
+            class_form,
+            copyToClipboard,
+            exportTemplate,
+            signature,
+            students,
+            students_info,
+        ]
+    );
+
+    // 处理模板保存
+    const handleTemplateSave = useCallback(
+        (newTemplate: string, newSignature: string) => {
+            // 保存模板到localStorage
+            localStorage.setItem("feedback-template", newTemplate);
+            localStorage.setItem("signature", newSignature);
+
+            // 更新状态
+            setCustomTemplate(newTemplate);
+            setExportTemplate(newTemplate);
+            setSignature(newSignature);
+
+            // 关闭模态框
+            setIsTemplateModalVisible(false);
+        },
+        []
+    );
+
     return (
         <>
             {/* 设置抽屉 */}
@@ -463,6 +601,18 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     setPromptItems={setPromptItems}
                     promptKey={promptKey}
                     setPromptKey={setPromptKey}
+                    sendMessage={sendMessage}
+                />
+            </Suspense>
+
+            {/* 模板编辑器 */}
+            <Suspense fallback={<div>加载中...</div>}>
+                <TemplateEditor
+                    isOpen={isTemplateModalVisible}
+                    onClose={() => setIsTemplateModalVisible(false)}
+                    onSave={handleTemplateSave}
+                    initialTemplate={customTemplate}
+                    initialSignature={signature}
                     sendMessage={sendMessage}
                 />
             </Suspense>
@@ -529,6 +679,18 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                     onClick={handleImport}
                                 >
                                     导入
+                                </Button>,
+                                // 自定义模板按钮
+                                <Button
+                                    key="template"
+                                    style={{ width: "100%" }}
+                                    type="link"
+                                    onClick={() => {
+                                        setIsTemplateModalVisible(true);
+                                    }}
+                                >
+                                    <EditOutlined />
+                                    自定义模板
                                 </Button>,
                             ]}
                         >
@@ -825,6 +987,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 students_info={students_info}
                                 handleSingleAIOptimize={handleSingleAIOptimize}
                                 copyToClipboard={copyToClipboard}
+                                copyStudentWithTemplate={
+                                    handleCopyStudentWithTemplate
+                                }
                             />
                         </Suspense>
                     </Form>
@@ -894,19 +1059,58 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     if (!isFinishedRef.current) {
                         sendWarning("内容可能不完整, 或未点击提交按钮.");
                     }
+
+                    // 获取表单数据
+                    const data = class_form.getFieldsValue();
+                    // 添加get方法以便获取表单字段值
+                    const get = (key: string) => data[key];
+
+                    // 获取课程名称
+                    const courseName = get("course-name") as string;
+
+                    // 获取课程内容并格式化为列表
+                    const courseContents =
+                        get("course-contents")?.map(
+                            (item: { item: string }) => `- ${item.item}\n`
+                        ) || [];
+
+                    // 获取教学目标并格式化为列表
+                    const courseObjectives =
+                        get("course-objectives")?.map(
+                            (item: { item: string }) => `- ${item.item}\n`
+                        ) || [];
+
+                    // 获取课程时间范围
+                    const time = get("course-time") as
+                        | [dayjs.Dayjs, dayjs.Dayjs]
+                        | undefined;
+
                     // 构建导出结果
                     let result = "";
                     for (const [index, student] of students.entries()) {
                         // 添加学生标题
                         result += `### ${student}\n`;
-                        // 替换模板中的占位符
-                        result += template.replace(
-                            "{{courseFeedback}}",
-                            students_info[index].content || ""
+
+                        // 使用封装的替换函数处理模板
+                        const studentTemplate = replaceTemplate(
+                            exportTemplate,
+                            {
+                                courseName,
+                                courseTime: time,
+                                courseContents,
+                                courseObjectives,
+                                signature,
+                                courseFeedback:
+                                    students_info[index]?.content || "",
+                            }
                         );
+
+                        result += studentTemplate;
+
                         // 添加分隔线
                         result += "\n\n---\n";
                     }
+
                     // 复制到剪贴板
                     copyToClipboard(result);
                 }}

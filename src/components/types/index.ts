@@ -1,3 +1,5 @@
+import type { JointContent } from "antd/es/message/interface";
+
 // 学生信息接口
 export interface StudentsInfo {
     name: string;
@@ -36,3 +38,13 @@ export interface PromptItem {
 }
 
 export type PromptItems = Record<PromptType, PromptItem>;
+
+// 模板编辑器组件属性接口
+export interface TemplateEditorProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (template: string, signature: string) => void;
+    initialTemplate: string;
+    initialSignature: string;
+    sendMessage: (content: JointContent) => void;
+}

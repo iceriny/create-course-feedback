@@ -1,6 +1,6 @@
 # 课程反馈生成工具
 
-![版本](https://img.shields.io/badge/版本-0.4.0-blue.svg)
+![版本](https://img.shields.io/badge/版本-0.5.0-blue.svg)
 ![许可证](https://img.shields.io/badge/许可证-MIT-green.svg)
 
 这是一个面向教育工作者的纯前端应用，旨在帮助教师快速高效地生成个性化课程反馈。通过直观的界面和 AI 辅助功能，教师可以为每位学生创建专业、个性化的课程反馈内容，并以 Markdown 格式导出。

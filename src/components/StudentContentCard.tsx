@@ -66,12 +66,9 @@ const StudentContentCard = memo(
                             onClick={() => {
                                 handleSingleAIOptimize(index);
                             }}
-                            disabled={
-                                studentInfo.content.length === 0 ||
-                                studentInfo.loading
-                            }
+                            disabled={studentInfo.loading}
                         >
-                            重新生成
+                            重新或单独生成
                         </Button>
                     </Flex>
                 }
@@ -92,11 +89,21 @@ const StudentContentCard = memo(
                 {
                     // 加载动画
                     studentInfo?.loading && (
-                        <LoadingOutlined
+                        <Flex
+                            justify="center"
+                            align="center"
                             style={{
-                                color: token.colorPrimary,
+                                marginTop: "1rem",
+                                marginBottom: "1rem",
                             }}
-                        />
+                        >
+                            <LoadingOutlined
+                                style={{
+                                    fontSize: "1.5rem",
+                                    color: token.colorPrimary,
+                                }}
+                            />
+                        </Flex>
                     )
                 }
                 {/* ai输出内容 */}

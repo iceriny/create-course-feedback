@@ -3,6 +3,7 @@ import {
     EllipsisOutlined,
     FileTextFilled,
     InfoCircleFilled,
+    LoadingOutlined,
     ThunderboltOutlined,
 } from "@ant-design/icons";
 import {
@@ -18,6 +19,8 @@ import {
     Row,
     Select,
     Space,
+    Spin,
+    Tag,
     theme,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
@@ -130,6 +133,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const [history, setHistory] = useState<HistorysType>({});
     // 获取主题token
     const { token } = useToken();
+    // 节流状态
+    const [isThrottled, setIsThrottled] = useState(false);
+    // 节流消息
+    const [throttleMessage, setThrottleMessage] = useState("");
 
     // 修改useEffect中的预加载代码，确保在正确的时机加载
     useEffect(() => {
@@ -143,7 +150,17 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             preloadComponents();
         }, 1000);
 
-        return () => clearTimeout(timer);
+        // 添加节流状态监听器
+        const api = getAPI();
+        const unsubscribe = api.addThrottleListener((isThrottled, message) => {
+            setIsThrottled(isThrottled);
+            setThrottleMessage(message);
+        });
+
+        return () => {
+            clearTimeout(timer);
+            unsubscribe();
+        };
     }, []);
 
     // 拷贝到剪切板
@@ -245,7 +262,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
         // 标记表单已完成
         isFinishedRef.current = true;
-    }, [class_form, history]);
+
+        // 添加提交成功的反馈
+        sendMessage("课程信息提交成功！");
+    }, [class_form, history, sendMessage]);
 
     // 导入班级数据
     const importClass = useCallback(
@@ -833,6 +853,35 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     )}
                 </Col>
             </Row>
+
+            {/* 节流提醒 */}
+            {isThrottled && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: "20px",
+                        right: "20px",
+                        zIndex: 1000,
+                        padding: "10px 15px",
+                        background: token.colorWarning,
+                        borderRadius: "8px",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                    }}
+                >
+                    <Spin
+                        indicator={
+                            <LoadingOutlined
+                                style={{ fontSize: 18, color: "#fff" }}
+                                spin
+                            />
+                        }
+                    />
+                    <Tag color="warning">{throttleMessage}</Tag>
+                </div>
+            )}
 
             {/* 导出按钮 */}
             <FloatButton

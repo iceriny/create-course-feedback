@@ -4,19 +4,32 @@ import { FC, useEffect, useState } from "react";
 
 import Version from "./Version";
 
+// 定义类型
+interface VersionInfo {
+    version: string;
+    content: string;
+    date: string;
+}
+
+type VersionData = VersionInfo[];
+
 const UpdateInfo: FC = () => {
     const version = Version.getInstance();
     const [versionInfo, setVersionInfo] = useState<VersionData>([]);
     const [versionOpen, setVersionOpen] = useState(false);
 
     useEffect(() => {
-        version.checkForUpdates().then(() => {
-            if (version.isUpdateModalVisible()) {
+        // 仅在组件挂载时检查版本更新
+        const checkVersion = async () => {
+            const hasUpdates = await version.checkForUpdates();
+            if (hasUpdates && version.isUpdateModalVisible()) {
                 setVersionOpen(true);
                 setVersionInfo(version.getUpdateInfo().reverse());
             }
-        });
-    }, [version, versionInfo]);
+        };
+
+        checkVersion();
+    }, []); // 移除依赖项，仅在组件挂载时执行一次
 
     const handleOk = () => {
         // if (versionInfo?.downloadUrl) {
@@ -45,14 +58,24 @@ const UpdateInfo: FC = () => {
                         <List.Item>
                             <List.Item.Meta
                                 title={item.version}
-                                description={item.description}
+                                description={`更新日期: ${item.date}`}
                             />
-                            {item.updateInfo.map((info, index) => (
-                                <p key={index}>
-                                    <RightOutlined style={{ marginRight: 5 }} />
-                                    {info}
-                                </p>
-                            ))}
+                            <div className="version-content">
+                                {item.content.split("\n").map((line, index) => (
+                                    <p key={index}>
+                                        {line.startsWith("-") ? (
+                                            <>
+                                                <RightOutlined
+                                                    style={{ marginRight: 5 }}
+                                                />
+                                                {line.substring(2)}
+                                            </>
+                                        ) : (
+                                            line
+                                        )}
+                                    </p>
+                                ))}
+                            </div>
                         </List.Item>
                     )}
                 />

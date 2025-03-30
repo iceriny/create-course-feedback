@@ -11,7 +11,58 @@ export interface MessageTool {
         strict: boolean;
     };
 }
-export type ModelType = "Qwen/QwQ-32B";
+export type ModelType = string;
+
+// 添加供应商类型定义
+export type ProviderType =
+    | "siliconflow"
+    | "openai"
+    | "deepseek"
+    | "gemini"
+    | "custom";
+
+// 供应商配置接口
+export interface ProviderConfig {
+    name: string;
+    apiUrl: string;
+    modelListUrl: string;
+    defaultModel: ModelType;
+}
+
+// 预定义供应商配置
+export const PROVIDERS: Record<ProviderType, ProviderConfig> = {
+    siliconflow: {
+        name: "硅基流动",
+        apiUrl: "https://api.siliconflow.cn/v1/chat/completions",
+        modelListUrl: "https://api.siliconflow.cn/v1/models?type=text",
+        defaultModel: "Qwen/QwQ-32B",
+    },
+    openai: {
+        name: "OpenAI",
+        apiUrl: "https://api.openai.com/v1/chat/completions",
+        modelListUrl: "https://api.openai.com/v1/models",
+        defaultModel: "gpt-3.5-turbo",
+    },
+    deepseek: {
+        name: "DeepSeek",
+        apiUrl: "https://api.deepseek.com/chat/completions",
+        modelListUrl: "https://api.deepseek.com/models",
+        defaultModel: "deepseek-chat",
+    },
+    gemini: {
+        name: "Gemini",
+        apiUrl: "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent",
+        modelListUrl: "https://generativelanguage.googleapis.com/v1/models",
+        defaultModel: "gemini-pro",
+    },
+    custom: {
+        name: "自定义",
+        apiUrl: "",
+        modelListUrl: "",
+        defaultModel: "Qwen/QwQ-32B",
+    },
+};
+
 export interface MessageBody {
     model: ModelType;
     messages: Message[];
@@ -55,6 +106,16 @@ interface QueueItem {
     onFinish?: () => void;
 }
 
+// Gemini模型响应类型
+interface GeminiModelResponse {
+    models: {
+        name: string;
+        version: string;
+        displayName?: string;
+        description?: string;
+    }[];
+}
+
 class API {
     static instance: API;
     private static token: string;
@@ -62,6 +123,19 @@ class API {
     static option: Option;
     static model_list: string[] = [];
     private static model: ModelType = "Qwen/QwQ-32B";
+    // 标记模型列表是否可用
+    static modelListAvailable: boolean = true;
+    // 允许自定义模型
+    static allowCustomModel: boolean = false;
+
+    // 新增：当前供应商
+    private static provider: ProviderType = "siliconflow";
+    private static customProviderConfig: ProviderConfig = {
+        name: "自定义",
+        apiUrl: "",
+        modelListUrl: "",
+        defaultModel: "Qwen/QwQ-32B",
+    };
 
     // 节流控制相关属性
     private static readonly MAX_REQUESTS_PER_SECOND = 3;
@@ -88,6 +162,18 @@ class API {
         return API.instance;
     }
     init() {
+        // 从本地存储加载供应商设置
+        const savedProvider = localStorage.getItem("api_provider");
+        if (savedProvider) {
+            API.provider = savedProvider as ProviderType;
+        }
+
+        // 加载自定义供应商配置
+        const customConfig = localStorage.getItem("custom_provider_config");
+        if (customConfig) {
+            API.customProviderConfig = JSON.parse(customConfig);
+        }
+
         API.messages = {
             model: API.model,
             messages: [],
@@ -112,7 +198,16 @@ class API {
         if (api_key) {
             API.setToken(api_key);
         }
+
+        // 加载模型列表
         API.getModelList();
+
+        // 加载自定义模型
+        const customModel = localStorage.getItem("custom_model");
+        if (customModel && API.provider === "custom") {
+            API.model = customModel;
+            API.messages.model = customModel;
+        }
     }
     static setToken(token: string) {
         API.token = token;
@@ -133,6 +228,73 @@ class API {
     static setMessageBody() {
         API.option.headers.Authorization = `Bearer ${API.token}`;
         API.option.body = JSON.stringify(API.messages);
+    }
+
+    // 获取当前供应商配置
+    static getCurrentProviderConfig(): ProviderConfig {
+        return API.provider === "custom"
+            ? API.customProviderConfig
+            : PROVIDERS[API.provider];
+    }
+
+    // 设置供应商
+    static setProvider(provider: ProviderType) {
+        API.provider = provider;
+        localStorage.setItem("api_provider", provider);
+        // 切换供应商时更新模型
+        API.model = API.getCurrentProviderConfig().defaultModel;
+        API.messages.model = API.model;
+        // 重新获取模型列表
+        API.getModelList();
+    }
+
+    // 获取当前供应商
+    static getProvider(): ProviderType {
+        return API.provider;
+    }
+
+    // 设置自定义供应商配置
+    static setCustomProviderConfig(config: Partial<ProviderConfig>) {
+        API.customProviderConfig = { ...API.customProviderConfig, ...config };
+        localStorage.setItem(
+            "custom_provider_config",
+            JSON.stringify(API.customProviderConfig)
+        );
+        // 如果当前是自定义供应商，更新模型列表
+        if (API.provider === "custom") {
+            API.getModelList();
+        }
+    }
+
+    // 获取自定义供应商配置
+    static getCustomProviderConfig(): ProviderConfig {
+        return API.customProviderConfig;
+    }
+
+    // 获取所有支持的供应商
+    static getProviders(): { value: ProviderType; label: string }[] {
+        return Object.entries(PROVIDERS).map(([key, config]) => ({
+            value: key as ProviderType,
+            label: config.name,
+        }));
+    }
+
+    // 设置自定义模型名称
+    static setCustomModel(modelName: string) {
+        if (modelName && modelName.trim() !== "") {
+            API.model = modelName.trim();
+            API.messages.model = API.model;
+            localStorage.setItem("custom_model", API.model);
+        }
+    }
+
+    // 获取是否允许自定义模型
+    static isCustomModelAllowed(): boolean {
+        return (
+            API.allowCustomModel ||
+            !API.modelListAvailable ||
+            API.model_list.length === 0
+        );
     }
 
     // 添加节流状态监听器
@@ -314,10 +476,17 @@ class API {
         API.messages.messages = API.messages.messages.concat(message);
         API.setMessageBody();
 
-        const response = await fetch(
-            "https://api.siliconflow.cn/v1/chat/completions",
-            API.option
-        );
+        const providerConfig = API.getCurrentProviderConfig();
+
+        // 获取当前提供商类型
+        const currentProvider = API.getProvider();
+
+        // Gemini使用不同的API格式
+        if (currentProvider === "gemini") {
+            return this._sendGeminiMessage(message, callback, onFinish);
+        }
+
+        const response = await fetch(providerConfig.apiUrl, API.option);
         const reader = response.body?.getReader();
         if (!reader) {
             console.error("Failed to get reader");
@@ -377,19 +546,170 @@ class API {
         }
     }
 
+    // Gemini API请求处理方法
+    private async _sendGeminiMessage(
+        message: Message[],
+        callback?: (content: string | null, type?: ContentType) => void,
+        onFinish?: () => void
+    ) {
+        // 构建Gemini API格式的请求
+        const geminiMessages = message.map((msg) => {
+            // 将OpenAI格式转换为Gemini格式
+            const role = msg.role === "assistant" ? "model" : msg.role;
+            return {
+                role,
+                parts: [{ text: msg.content }],
+            };
+        });
+
+        // 构建Gemini请求主体
+        const geminiRequestBody = {
+            contents: geminiMessages,
+            generationConfig: {
+                temperature: API.messages.temperature,
+                topP: API.messages.top_p,
+                topK: API.messages.top_k,
+                maxOutputTokens: API.messages.max_tokens,
+            },
+        };
+
+        // 设置Gemini API请求选项
+        const geminiOption = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                // Gemini使用不同的认证方式，将API key作为URL参数
+            },
+            body: JSON.stringify(geminiRequestBody),
+        };
+
+        const providerConfig = API.getCurrentProviderConfig();
+
+        // 添加API key作为URL参数
+        const apiUrl = `${providerConfig.apiUrl}?key=${API.token}`;
+
+        try {
+            const response = await fetch(apiUrl, geminiOption);
+            const data = await response.json();
+
+            if (data.error) {
+                console.error("Gemini API error:", data.error);
+                callback?.(null);
+                onFinish?.();
+                return;
+            }
+
+            // 提取Gemini响应内容
+            let content = "";
+            if (data.candidates && data.candidates.length > 0) {
+                content = data.candidates[0].content.parts[0].text;
+                callback?.(content, "content");
+            }
+
+            onFinish?.();
+        } catch (error) {
+            console.error("Error calling Gemini API:", error);
+            callback?.(null);
+            onFinish?.();
+        }
+    }
+
     static async getModelList() {
+        // 重置模型列表可用性状态
+        API.modelListAvailable = true;
+
         const options = {
             method: "GET",
             headers: { Authorization: `Bearer ${API.token}` },
         };
 
-        fetch("https://api.siliconflow.cn/v1/models?type=text", options)
-            .then((response) => response.json())
+        const providerConfig = API.getCurrentProviderConfig();
+        if (!providerConfig.modelListUrl) {
+            console.warn("No model list URL provided for the current provider");
+            API.modelListAvailable = false;
+            return;
+        }
+
+        // 获取当前提供商类型
+        const currentProvider = API.getProvider();
+
+        // Gemini使用不同的认证方式和响应格式
+        if (currentProvider === "gemini") {
+            const apiUrl = `${providerConfig.modelListUrl}?key=${API.token}`;
+
+            fetch(apiUrl)
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP error! status: ${response.status}`
+                        );
+                    }
+                    return response.json();
+                })
+                .then((response: GeminiModelResponse) => {
+                    // Gemini模型列表格式与OpenAI不同
+                    if (response.models && response.models.length > 0) {
+                        API.model_list = response.models.map(
+                            (item) => item.name
+                        );
+                    } else {
+                        // 如果没有获取到模型列表，至少设置默认模型
+                        API.model_list = ["gemini-pro", "gemini-pro-vision"];
+                        API.modelListAvailable = false;
+                    }
+                })
+                .catch((err) => {
+                    console.error(err);
+                    // 设置默认模型列表
+                    API.model_list = ["gemini-pro", "gemini-pro-vision"];
+                    API.modelListAvailable = false;
+                });
+            return;
+        }
+
+        fetch(providerConfig.modelListUrl, options)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then((response: ModelListResponse) => {
                 const data = response.data;
-                API.model_list = data.map((item) => item.id);
+                if (data && data.length > 0) {
+                    API.model_list = data.map((item) => item.id);
+                } else {
+                    API.modelListAvailable = false;
+                    throw new Error("No models found in response");
+                }
             })
-            .catch((err) => console.error(err));
+            .catch((err) => {
+                console.error(err);
+                API.modelListAvailable = false;
+                // 根据不同提供商设置默认模型列表
+                switch (currentProvider) {
+                    case "openai":
+                        API.model_list = [
+                            "gpt-3.5-turbo",
+                            "gpt-4",
+                            "gpt-4-turbo",
+                        ];
+                        break;
+                    case "deepseek":
+                        API.model_list = ["deepseek-chat", "deepseek-reasoner"];
+                        break;
+                    case "siliconflow":
+                        API.model_list = ["Qwen/QwQ-32B"];
+                        break;
+                    case "custom":
+                        // 对于自定义供应商，启用自定义模型输入
+                        API.allowCustomModel = true;
+                        API.model_list = [];
+                        break;
+                    default:
+                        API.model_list = [];
+                }
+            });
     }
 
     static setModel(model: ModelType) {

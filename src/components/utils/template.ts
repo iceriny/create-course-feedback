@@ -77,7 +77,9 @@ export function replaceTemplate(
     );
 
     // 替换学生课堂表现
-    result = result.replace(/{{courseFeedback}}/g, params.courseFeedback ?? "");
+    if (params.courseFeedback) {
+        result = result.replace(/{{courseFeedback}}/g, params.courseFeedback);
+    }
 
     return result;
 }

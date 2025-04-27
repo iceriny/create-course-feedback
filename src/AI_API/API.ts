@@ -117,10 +117,10 @@ interface GeminiModelResponse {
 }
 
 class API {
-    static instance: API;
+    // static instance: API;
     private static token: string;
-    static messages: MessageBody;
-    static option: Option;
+    messages: MessageBody | null = null;
+    option: Option | null = null;
     static model_list: string[] = [];
     private static model: ModelType = "Qwen/QwQ-32B";
     // 标记模型列表是否可用
@@ -149,18 +149,18 @@ class API {
     private lastMinute: number = 0;
 
     // 节流状态监听器
-    private throttleListeners: ((
+    private static throttleListeners: ((
         isThrottled: boolean,
         message: string
     ) => void)[] = [];
 
     constructor() {
         this.init();
-        API.instance = this;
+        // API.instance = this;
     }
-    static getInstance() {
-        return API.instance;
-    }
+    // static getInstance() {
+    //     return API.instance;
+    // }
     init() {
         // 从本地存储加载供应商设置
         const savedProvider = localStorage.getItem("api_provider");
@@ -174,7 +174,7 @@ class API {
             API.customProviderConfig = JSON.parse(customConfig);
         }
 
-        API.messages = {
+        this.messages = {
             model: API.model,
             messages: [],
             stream: true,
@@ -186,7 +186,7 @@ class API {
             frequency_penalty: 0.5,
             n: 1,
         };
-        API.option = {
+        this.option = {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${API.token}`,
@@ -206,7 +206,7 @@ class API {
         const customModel = localStorage.getItem("custom_model");
         if (customModel && API.provider === "custom") {
             API.model = customModel;
-            API.messages.model = customModel;
+            this.messages.model = customModel;
         }
     }
     static setToken(token: string) {
@@ -225,9 +225,11 @@ class API {
         )}`;
     }
 
-    static setMessageBody() {
-        API.option.headers.Authorization = `Bearer ${API.token}`;
-        API.option.body = JSON.stringify(API.messages);
+    private setMessageBody() {
+        if (!this.option || !this.messages) return;
+        this.option.headers.Authorization = `Bearer ${API.token}`;
+        this.option.body = JSON.stringify(this.messages);
+        console.log("API.option.body", this.option.body);
     }
 
     // 获取当前供应商配置
@@ -243,7 +245,7 @@ class API {
         localStorage.setItem("api_provider", provider);
         // 切换供应商时更新模型
         API.model = API.getCurrentProviderConfig().defaultModel;
-        API.messages.model = API.model;
+        // this.messages.model = API.model;
         // 重新获取模型列表
         API.getModelList();
     }
@@ -283,7 +285,7 @@ class API {
     static setCustomModel(modelName: string) {
         if (modelName && modelName.trim() !== "") {
             API.model = modelName.trim();
-            API.messages.model = API.model;
+            // API.messages.model = API.model;
             localStorage.setItem("custom_model", API.model);
         }
     }
@@ -298,20 +300,23 @@ class API {
     }
 
     // 添加节流状态监听器
-    addThrottleListener(
+    static addThrottleListener(
         listener: (isThrottled: boolean, message: string) => void
     ) {
-        this.throttleListeners.push(listener);
+        API.throttleListeners.push(listener);
         return () => {
-            this.throttleListeners = this.throttleListeners.filter(
+            API.throttleListeners = API.throttleListeners.filter(
                 (l) => l !== listener
             );
         };
     }
 
     // 通知所有监听器节流状态
-    private notifyThrottleListeners(isThrottled: boolean, message: string) {
-        this.throttleListeners.forEach((listener) =>
+    private static notifyThrottleListeners(
+        isThrottled: boolean,
+        message: string
+    ) {
+        API.throttleListeners.forEach((listener) =>
             listener(isThrottled, message)
         );
     }
@@ -369,7 +374,7 @@ class API {
             if (throttleStatus.isThrottled) {
                 // 只在每分钟超过限制时通知UI显示节流提醒
                 if (throttleStatus.shouldNotify) {
-                    this.notifyThrottleListeners(true, throttleStatus.message);
+                    API.notifyThrottleListeners(true, throttleStatus.message);
                 }
 
                 // 等待合适的时间后重试
@@ -386,7 +391,7 @@ class API {
             }
 
             // 通知UI取消节流提醒
-            this.notifyThrottleListeners(false, "");
+            API.notifyThrottleListeners(false, "");
 
             // 确定可以同时处理的请求数量
             const availableConcurrent = throttleStatus.availableConcurrent;
@@ -472,9 +477,10 @@ class API {
         callback?: (content: string | null, type?: ContentType) => void,
         onFinish?: () => void
     ) {
+        if (!this.messages || !this.option) return;
         console.log("sendMessage", message);
-        API.messages.messages = API.messages.messages.concat(message);
-        API.setMessageBody();
+        this.messages.messages = this.messages.messages.concat(message);
+        this.setMessageBody();
 
         const providerConfig = API.getCurrentProviderConfig();
 
@@ -486,7 +492,7 @@ class API {
             return this._sendGeminiMessage(message, callback, onFinish);
         }
 
-        const response = await fetch(providerConfig.apiUrl, API.option);
+        const response = await fetch(providerConfig.apiUrl, this.option);
         const reader = response.body?.getReader();
         if (!reader) {
             console.error("Failed to get reader");
@@ -552,6 +558,7 @@ class API {
         callback?: (content: string | null, type?: ContentType) => void,
         onFinish?: () => void
     ) {
+        if (!this.messages) return;
         // 构建Gemini API格式的请求
         const geminiMessages = message.map((msg) => {
             // 将OpenAI格式转换为Gemini格式
@@ -566,10 +573,10 @@ class API {
         const geminiRequestBody = {
             contents: geminiMessages,
             generationConfig: {
-                temperature: API.messages.temperature,
-                topP: API.messages.top_p,
-                topK: API.messages.top_k,
-                maxOutputTokens: API.messages.max_tokens,
+                temperature: this.messages.temperature,
+                topP: this.messages.top_p,
+                topK: this.messages.top_k,
+                maxOutputTokens: this.messages.max_tokens,
             },
         };
 
@@ -714,8 +721,6 @@ class API {
 
     static setModel(model: ModelType) {
         API.model = model;
-        API.messages.model = model;
-        API.setMessageBody();
     }
     static getModel() {
         return API.model;

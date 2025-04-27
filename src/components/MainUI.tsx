@@ -36,7 +36,7 @@ import {
     Suspense,
 } from "react";
 import { v4 as uuid_v4 } from "uuid";
-import getAPI, { API, type ModelType } from "../AI_API";
+import { API, type ModelType } from "../AI_API";
 
 // 导入子组件
 const StringListInput = lazy(() => import("./StringListInput"));
@@ -202,8 +202,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         }, 1000);
 
         // 添加节流状态监听器
-        const api = getAPI();
-        const unsubscribe = api.addThrottleListener((isThrottled, message) => {
+        // const api = getAPI();
+        const unsubscribe = API.addThrottleListener((isThrottled, message) => {
             setIsThrottled(isThrottled);
             setThrottleMessage(message);
         });
@@ -407,7 +407,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             });
 
             // 调用AI API发送消息
-            getAPI().sendMessage(
+            new API().sendMessage(
                 // 成功回调，更新文本区域内容
                 (content, type) => {
                     if (type === null || content === null) return;

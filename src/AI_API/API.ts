@@ -524,13 +524,12 @@ class API {
                     try {
                         const jsonData = JSON.parse(data);
                         const this_reasoning_content =
-                            jsonData.choices[0].delta.reasoning_content?.trim();
+                            jsonData.choices[0].delta.reasoning_content;
                         if (this_reasoning_content) {
                             reasoning_content += this_reasoning_content;
                             callback?.(reasoning_content, "reasoning_content");
                         }
-                        const this_content =
-                            jsonData.choices[0].delta.content?.trim();
+                        const this_content = jsonData.choices[0].delta.content;
                         if (this_content) {
                             content += this_content;
                             callback?.(content, "content");

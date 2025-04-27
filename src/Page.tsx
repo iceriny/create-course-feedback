@@ -28,8 +28,13 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
     return (
         <Layout style={{ minHeight: "100vh" }}>
             <Header style={{ fontSize: "1.5rem" }}>
-                <Logo />
-                课程反馈生成器
+                <Flex justify="space-between">
+                    <span>
+                        <Logo />
+                        课程反馈生成器
+                    </span>
+                    <span>v{__APP_VERSION__}</span>
+                </Flex>
             </Header>
             <Content style={{ padding: "50px 50px" }}>
                 <MainUI sendMessage={sendMessage} sendWarning={sendWarning} />

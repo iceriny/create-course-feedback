@@ -50,7 +50,7 @@ const StudentContentCard = memo(
                 size="small"
                 title={
                     <Flex justify="space-between">
-                        <Typography.Text>
+                        <Typography.Text style={{ alignContent: "center" }}>
                             <span
                                 style={{
                                     marginRight: "20px",
@@ -101,6 +101,7 @@ const StudentContentCard = memo(
                             minRows: 1,
                             maxRows: 12,
                         }}
+                        style={{ padding: "8px" }}
                     />
                 </Form.Item>
 

@@ -35,7 +35,7 @@ export const PROVIDERS: Record<ProviderType, ProviderConfig> = {
         name: "硅基流动",
         apiUrl: "https://api.siliconflow.cn/v1/chat/completions",
         modelListUrl: "https://api.siliconflow.cn/v1/models?type=text",
-        defaultModel: "Qwen/QwQ-32B",
+        defaultModel: "Qwen/Qwen3-32B",
     },
     openai: {
         name: "OpenAI",
@@ -59,7 +59,7 @@ export const PROVIDERS: Record<ProviderType, ProviderConfig> = {
         name: "自定义",
         apiUrl: "",
         modelListUrl: "",
-        defaultModel: "Qwen/QwQ-32B",
+        defaultModel: "Qwen/Qwen3-32B",
     },
 };
 
@@ -68,6 +68,9 @@ export interface MessageBody {
     messages: Message[];
     stream: boolean;
     max_tokens: number;
+    enable_thinking?: boolean;
+    thinking_budget?: number;
+    min_p?: number;
     stop: string | null;
     temperature: number;
     top_p: number;
@@ -122,7 +125,7 @@ class API {
     messages: MessageBody | null = null;
     option: Option | null = null;
     static model_list: string[] = [];
-    private static model: ModelType = "Qwen/QwQ-32B";
+    private static model: ModelType = "Qwen/Qwen3-32B";
     // 标记模型列表是否可用
     static modelListAvailable: boolean = true;
     // 允许自定义模型
@@ -134,7 +137,7 @@ class API {
         name: "自定义",
         apiUrl: "",
         modelListUrl: "",
-        defaultModel: "Qwen/QwQ-32B",
+        defaultModel: "Qwen/Qwen3-32B",
     };
 
     // 节流控制相关属性
@@ -178,7 +181,7 @@ class API {
             model: API.model,
             messages: [],
             stream: true,
-            max_tokens: 16384,
+            max_tokens: 8192,
             stop: null,
             temperature: 0.7,
             top_p: 1,
@@ -186,6 +189,11 @@ class API {
             frequency_penalty: 0.5,
             n: 1,
         };
+        if (API.is_qwen3()) {
+            this.messages.enable_thinking = true;
+            this.messages.thinking_budget = 5000;
+            this.messages.min_p = 0.05;
+        }
         this.option = {
             method: "POST",
             headers: {
@@ -208,6 +216,9 @@ class API {
             API.model = customModel;
             this.messages.model = customModel;
         }
+    }
+    static is_qwen3() {
+        return API.model.includes("Qwen3");
     }
     static setToken(token: string) {
         API.token = token;
@@ -705,7 +716,7 @@ class API {
                         API.model_list = ["deepseek-chat", "deepseek-reasoner"];
                         break;
                     case "siliconflow":
-                        API.model_list = ["Qwen/QwQ-32B"];
+                        API.model_list = ["Qwen/Qwen3-32B"];
                         break;
                     case "custom":
                         // 对于自定义供应商，启用自定义模型输入

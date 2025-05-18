@@ -6,6 +6,7 @@ import {
     InfoCircleFilled,
     LoadingOutlined,
     ThunderboltOutlined,
+    ExportOutlined,
 } from "@ant-design/icons";
 import {
     Anchor,
@@ -14,6 +15,7 @@ import {
     Col,
     ConfigProvider,
     DatePicker,
+    Flex,
     FloatButton,
     Form,
     Input,
@@ -23,6 +25,7 @@ import {
     Spin,
     Tag,
     theme,
+    Tooltip,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
 import dayjs from "dayjs";
@@ -818,6 +821,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                                             style={{
                                                                 width: 350,
                                                             }}
+                                                            onPressEnter={() => {
+                                                                opt.add();
+                                                            }}
                                                             placeholder="填写课程内容"
                                                         />
                                                     </Form.Item>
@@ -924,55 +930,72 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 <Col span={6}>
                     {/* 学生列表输入组件 */}
                     <Suspense fallback={<div>加载中...</div>}>
-                        <StringListInput
-                            values_={students}
-                            activated_list_={Object.values(students_info).map(
-                                (student) => student.activated
+                        <Flex vertical gap={10}>
+                            <StringListInput
+                                values_={students}
+                                activated_list_={Object.values(
+                                    students_info
+                                ).map((student) => student.activated)}
+                                onChange={(values) => {
+                                    // 获取班级名称
+                                    const className =
+                                        class_form.getFieldValue("class-name");
+                                    if (!className) return;
+                                    // 为新增学生初始化内容
+                                    const new_students_info = {
+                                        ...students_info,
+                                    };
+                                    for (const [
+                                        index,
+                                        value,
+                                    ] of values.entries()) {
+                                        new_students_info[index] = {
+                                            name: value,
+                                            content: "",
+                                            think_content: "",
+                                            loading: false,
+                                            activated: true,
+                                        };
+                                    }
+                                    setStudentsInfo(new_students_info);
+                                    // 更新学生列表状态
+                                    setStudents(values);
+                                    // 保存学生列表到本地存储
+                                    localStorage.setItem(
+                                        `${className}_std`,
+                                        JSON.stringify(values)
+                                    );
+                                }}
+                                onClear={() => {
+                                    // 清空学生内容引用和学生列表
+                                    setStudentsInfo({});
+                                    setStudents([]);
+                                }}
+                                onActive={(index, activated_list) => {
+                                    setStudentsInfo((prevInfo) => {
+                                        const updatedInfo = { ...prevInfo };
+                                        updatedInfo[index] = {
+                                            ...updatedInfo[index],
+                                            activated: activated_list[index],
+                                        };
+                                        return updatedInfo;
+                                    });
+                                }}
+                            />
+                            {students.length > 0 && (
+                                <Tooltip placement="top" title="复制学生列表">
+                                    <Button
+                                        icon={<ExportOutlined />}
+                                        size="small"
+                                        onClick={() => {
+                                            copyToClipboard(
+                                                students.join(", ")
+                                            );
+                                        }}
+                                    />
+                                </Tooltip>
                             )}
-                            onChange={(values) => {
-                                // 获取班级名称
-                                const className =
-                                    class_form.getFieldValue("class-name");
-                                if (!className) return;
-                                // 为新增学生初始化内容
-                                const new_students_info = { ...students_info };
-                                for (const [index, value] of values.entries()) {
-                                    new_students_info[index] = {
-                                        name: value,
-                                        content: "",
-                                        think_content: "",
-                                        loading: false,
-                                        activated: true,
-                                    };
-                                }
-                                setStudentsInfo(new_students_info);
-                                // 更新学生列表状态
-                                setStudents(values);
-                                // 保存学生列表到本地存储
-                                localStorage.setItem(
-                                    `${className}_std`,
-                                    JSON.stringify(values)
-                                );
-                            }}
-                            onClear={() => {
-                                // 清空学生内容引用和学生列表
-                                setStudentsInfo({});
-                                setStudents([]);
-                            }}
-                            onClick={(index, value) => {
-                                console.log("点击了学生:", index, value);
-                            }}
-                            onActive={(index, activated_list) => {
-                                setStudentsInfo((prevInfo) => {
-                                    const updatedInfo = { ...prevInfo };
-                                    updatedInfo[index] = {
-                                        ...updatedInfo[index],
-                                        activated: activated_list[index],
-                                    };
-                                    return updatedInfo;
-                                });
-                            }}
-                        />
+                        </Flex>
                     </Suspense>
                 </Col>
 
@@ -1051,8 +1074,75 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             {/* 导出按钮 */}
             <FloatButton
                 icon={<FileTextFilled />}
-                type="primary"
+                type="default"
                 tooltip="导出内容到剪切板."
+                style={{ insetInlineEnd: 24 + 24 + 24 }}
+                onClick={() => {
+                    // 检查表单是否已提交
+                    if (!isFinishedRef.current) {
+                        sendWarning("内容可能不完整, 或未点击提交按钮.");
+                    }
+
+                    // 获取表单数据
+                    const data = class_form.getFieldsValue();
+                    // 添加get方法以便获取表单字段值
+                    const get = (key: string) => data[key];
+
+                    // 获取课程名称
+                    const courseName = get("course-name") as string;
+
+                    // 获取课程内容并格式化为列表
+                    const courseContents =
+                        get("course-contents")?.map(
+                            (item: { item: string }) => `- ${item.item}\n`
+                        ) || [];
+
+                    // 获取教学目标并格式化为列表
+                    const courseObjectives =
+                        get("course-objectives")?.map(
+                            (item: { item: string }) => `- ${item.item}\n`
+                        ) || [];
+
+                    // 获取课程时间范围
+                    const time = get("course-time") as
+                        | [dayjs.Dayjs, dayjs.Dayjs]
+                        | undefined;
+
+                    // 构建导出结果
+                    let result = "";
+                    for (const [index, student] of students.entries()) {
+                        // 添加学生标题
+                        result += `### ${student}\n`;
+
+                        // 使用封装的替换函数处理模板
+                        const studentTemplate = replaceTemplate(
+                            exportTemplate,
+                            {
+                                courseName,
+                                courseTime: time,
+                                courseContents,
+                                courseObjectives,
+                                signature,
+                                courseFeedback:
+                                    students_info[index]?.content || "",
+                            }
+                        );
+
+                        result += studentTemplate;
+
+                        // 添加分隔线
+                        result += "\n\n---\n";
+                    }
+
+                    // 复制到剪贴板
+                    copyToClipboard(result);
+                }}
+            />
+            {/* 过滤导出按钮 */}
+            <FloatButton
+                icon={<FileTextFilled />}
+                type="primary"
+                tooltip="导出内容到剪切板(不包括空反馈的学生以及没有打勾的学生)."
                 style={{ insetInlineEnd: 24 }}
                 onClick={() => {
                     // 检查表单是否已提交
@@ -1088,6 +1178,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     // 构建导出结果
                     let result = "";
                     for (const [index, student] of students.entries()) {
+                        if (
+                            students_info[index]?.content === "" ||
+                            !students_info[index]?.activated
+                        )
+                            continue;
                         // 添加学生标题
                         result += `### ${student}\n`;
 

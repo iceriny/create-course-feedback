@@ -7,6 +7,7 @@ import {
     LoadingOutlined,
     ThunderboltOutlined,
     ExportOutlined,
+    OrderedListOutlined,
 } from "@ant-design/icons";
 import {
     Anchor,
@@ -983,17 +984,76 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 }}
                             />
                             {students.length > 0 && (
-                                <Tooltip placement="top" title="复制学生列表">
-                                    <Button
-                                        icon={<ExportOutlined />}
-                                        size="small"
-                                        onClick={() => {
-                                            copyToClipboard(
-                                                students.join(", ")
-                                            );
-                                        }}
-                                    />
-                                </Tooltip>
+                                <Flex gap={10}>
+                                    <Tooltip
+                                        placement="top"
+                                        title="复制学生列表"
+                                    >
+                                        <Button
+                                            icon={<ExportOutlined />}
+                                            size="small"
+                                            onClick={() => {
+                                                copyToClipboard(
+                                                    students.join(", ")
+                                                );
+                                            }}
+                                        />
+                                    </Tooltip>
+                                    <Tooltip
+                                        placement="top"
+                                        title="按首字母顺序排序"
+                                    >
+                                        <Button
+                                            icon={<OrderedListOutlined />}
+                                            size="small"
+                                            onClick={() => {
+                                                setStudents(
+                                                    [...students].sort((a, b) =>
+                                                        a.localeCompare(b)
+                                                    )
+                                                );
+                                                // 排序: students_info
+                                                // 假设 students_info 类型为 Record<number, StudentsInfo>
+                                                const sortedStudents =
+                                                    Object.fromEntries(
+                                                        Object.entries(
+                                                            students_info
+                                                        )
+                                                            .map(
+                                                                ([
+                                                                    key,
+                                                                    value,
+                                                                ]) => ({
+                                                                    key: Number(
+                                                                        key
+                                                                    ),
+                                                                    value,
+                                                                })
+                                                            ) // 转换键为数字
+                                                            .sort((a, b) =>
+                                                                a.value.name.localeCompare(
+                                                                    b.value.name
+                                                                )
+                                                            ) // 按 name 排序
+                                                            .map(
+                                                                (
+                                                                    item,
+                                                                    index
+                                                                ) => [
+                                                                    index,
+                                                                    item.value,
+                                                                ]
+                                                            )
+                                                    ) as Record<
+                                                        number,
+                                                        StudentsInfo
+                                                    >;
+
+                                                setStudentsInfo(sortedStudents);
+                                            }}
+                                        />
+                                    </Tooltip>{" "}
+                                </Flex>
                             )}
                         </Flex>
                     </Suspense>

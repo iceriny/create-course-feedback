@@ -120,6 +120,7 @@ const Main: React.FC<NumberListInputProps> = ({
                     type="default"
                     size="small"
                     icon={<DeleteOutlined />}
+                    style={{ color: "red" }}
                     onClick={() => {
                         setValues([]);
                         setLength(2);

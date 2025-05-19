@@ -1007,13 +1007,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                             icon={<OrderedListOutlined />}
                                             size="small"
                                             onClick={() => {
-                                                setStudents(
-                                                    [...students].sort((a, b) =>
-                                                        a.localeCompare(b)
-                                                    )
+                                                const new_students = [
+                                                    ...students,
+                                                ].sort((a, b) =>
+                                                    a.localeCompare(b)
                                                 );
-                                                // 排序: students_info
-                                                // 假设 students_info 类型为 Record<number, StudentsInfo>
+                                                setStudents(new_students);
                                                 const sortedStudents =
                                                     Object.fromEntries(
                                                         Object.entries(
@@ -1050,9 +1049,18 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                                     >;
 
                                                 setStudentsInfo(sortedStudents);
+                                                const className =
+                                                    class_form.getFieldValue(
+                                                        "class-name"
+                                                    );
+                                                if (!className) return;
+                                                localStorage.setItem(
+                                                    `${className}_std`,
+                                                    JSON.stringify(new_students)
+                                                );
                                             }}
                                         />
-                                    </Tooltip>{" "}
+                                    </Tooltip>
                                 </Flex>
                             )}
                         </Flex>

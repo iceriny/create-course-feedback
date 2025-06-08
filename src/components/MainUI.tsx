@@ -27,6 +27,7 @@ import {
     Tag,
     theme,
     Tooltip,
+    Typography,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
 import dayjs from "dayjs";
@@ -1060,6 +1061,21 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                                 );
                                             }}
                                         />
+                                    </Tooltip>
+                                    <Tooltip placement="top" title="人数统计">
+                                        <Typography.Text
+                                            style={{
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            {`${
+                                                Object.values(
+                                                    students_info
+                                                ).filter(
+                                                    (item) => item.activated
+                                                ).length
+                                            }/${students.length}人`}
+                                        </Typography.Text>
                                     </Tooltip>
                                 </Flex>
                             )}

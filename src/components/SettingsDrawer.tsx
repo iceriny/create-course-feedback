@@ -11,7 +11,7 @@ import {
     Divider,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { v4 as uuid_v4 } from "uuid";
 import type { ModelType, ProviderType } from "../AI_API";
 import { API } from "../AI_API";
@@ -63,6 +63,14 @@ const SettingsDrawer = memo(
         const [customModelListUrl, setCustomModelListUrl] = useState<string>(
             API.getCustomProviderConfig().modelListUrl
         );
+        useEffect(() => {
+            const promptKey = localStorage.getItem(
+                "promptKey"
+            ) as PromptType | null;
+            if (promptKey) {
+                setPromptKey(promptKey);
+            }
+        }, [setPromptKey]);
 
         // 处理供应商变更
         const handleProviderChange = (value: ProviderType) => {
@@ -316,7 +324,9 @@ const SettingsDrawer = memo(
                                 <Select
                                     style={{ width: "30%" }}
                                     defaultValue={
-                                        "programming" as PromptType | "custom"
+                                        localStorage.getItem("promptKey") ||
+                                        ("programming" as PromptType) ||
+                                        "custom"
                                     }
                                     options={[
                                         ...Object.entries(promptItems).map(
@@ -345,6 +355,10 @@ const SettingsDrawer = memo(
                                             setPromptKey(uid as PromptType);
                                         } else {
                                             setPromptKey(value as PromptType);
+                                            localStorage.setItem(
+                                                "promptKey",
+                                                value
+                                            );
                                         }
                                     }}
                                 />
@@ -372,7 +386,6 @@ const SettingsDrawer = memo(
                                                 )[0] as PromptType
                                             );
                                             setPromptItems(_t);
-
                                             savePromptToLocalStorage(_t);
                                         }}
                                     />

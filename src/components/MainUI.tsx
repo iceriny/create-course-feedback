@@ -182,6 +182,14 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const aiTemplateRef = useRef(AI_TEMPLATE);
     const [signature, setSignature] = useState("哆啦人工智能小栈");
 
+    const handleSetModel = useCallback(
+        (model: ModelType) => {
+            setModel(model);
+            localStorage.setItem("ai-model", JSON.stringify(model));
+        },
+        [setModel]
+    );
+
     // 修改useEffect中的预加载代码，确保在正确的时机加载
     useEffect(() => {
         const h = localStorage.getItem("class-history");
@@ -212,6 +220,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             setIsThrottled(isThrottled);
             setThrottleMessage(message);
         });
+
+        const aiModel = localStorage.getItem("ai-model");
+        if (aiModel) {
+            setModel(JSON.parse(aiModel));
+        }
 
         return () => {
             clearTimeout(timer);
@@ -601,7 +614,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     open={open}
                     setOpen={setOpen}
                     model={model}
-                    setModel={setModel}
+                    setModel={handleSetModel}
                     promptItems={promptItems}
                     setPromptItems={setPromptItems}
                     promptKey={promptKey}

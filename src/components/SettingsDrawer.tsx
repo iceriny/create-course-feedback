@@ -277,7 +277,6 @@ const SettingsDrawer = memo(
                                 )}
                                 onSelect={(value: ModelType) => {
                                     setModel(value);
-                                    API.setModel(value);
                                 }}
                             />
                         ) : (
@@ -288,7 +287,6 @@ const SettingsDrawer = memo(
                                 onChange={(e) => {
                                     const modelName = e.target.value;
                                     setModel(modelName);
-                                    API.setCustomModel(modelName);
                                 }}
                             />
                         )}

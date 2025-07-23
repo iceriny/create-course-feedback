@@ -186,6 +186,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         (model: ModelType) => {
             setModel(model);
             localStorage.setItem("ai-model", JSON.stringify(model));
+            API.setModel(model);
         },
         [setModel]
     );
@@ -224,6 +225,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         const aiModel = localStorage.getItem("ai-model");
         if (aiModel) {
             setModel(JSON.parse(aiModel));
+            API.setModel(JSON.parse(aiModel));
         }
 
         return () => {
@@ -786,6 +788,116 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 rules={[{ required: true }]}
                             >
                                 <RangePicker
+                                    needConfirm={false}
+                                    renderExtraFooter={() => {
+                                        const pickerDate: dayjs.Dayjs[] =
+                                            class_form.getFieldValue(
+                                                "course-time"
+                                            );
+                                        const set = (date: dayjs.Dayjs[]) => {
+                                            class_form.setFieldValue(
+                                                "course-time",
+                                                date
+                                            );
+                                        };
+                                        return (
+                                            <Flex
+                                                style={{
+                                                    width: "100%",
+                                                    margin: "12px 0",
+                                                    justifyContent: "end",
+                                                }}
+                                                gap={5}
+                                            >
+                                                <Button
+                                                    style={{ padding: 12 }}
+                                                    size="small"
+                                                    type="link"
+                                                    onClick={() => {
+                                                        set([
+                                                            pickerDate[0].subtract(
+                                                                1,
+                                                                "day"
+                                                            ),
+                                                            pickerDate[1].subtract(
+                                                                1,
+                                                                "day"
+                                                            ),
+                                                        ]);
+                                                    }}
+                                                >
+                                                    昨天
+                                                </Button>
+                                                <Button
+                                                    style={{ padding: 12 }}
+                                                    size="small"
+                                                    type="link"
+                                                    onClick={() => {
+                                                        set([
+                                                            pickerDate[0].subtract(
+                                                                1,
+                                                                "week"
+                                                            ),
+                                                            pickerDate[1].subtract(
+                                                                1,
+                                                                "week"
+                                                            ),
+                                                        ]);
+                                                    }}
+                                                >
+                                                    上周
+                                                </Button>
+                                                <Button
+                                                    style={{ padding: 12 }}
+                                                    size="small"
+                                                    type="primary"
+                                                    onClick={() => {
+                                                        let start =
+                                                            dayjs().startOf(
+                                                                "day"
+                                                            );
+                                                        let end =
+                                                            dayjs().startOf(
+                                                                "day"
+                                                            );
+                                                        console.log(
+                                                            "pickerDate",
+                                                            pickerDate
+                                                        );
+                                                        start = start
+                                                            .set(
+                                                                "hour",
+                                                                pickerDate[0].hour()
+                                                            )
+                                                            .set(
+                                                                "minute",
+                                                                pickerDate[0].minute()
+                                                            )
+                                                            .set(
+                                                                "second",
+                                                                pickerDate[0].second()
+                                                            );
+                                                        end = end
+                                                            .set(
+                                                                "hour",
+                                                                pickerDate[1].hour()
+                                                            )
+                                                            .set(
+                                                                "minute",
+                                                                pickerDate[1].minute()
+                                                            )
+                                                            .set(
+                                                                "second",
+                                                                pickerDate[1].second()
+                                                            );
+                                                        set([start, end]);
+                                                    }}
+                                                >
+                                                    本日
+                                                </Button>
+                                            </Flex>
+                                        );
+                                    }}
                                     showTime={{ format: "HH:mm" }}
                                     format="YYYY-MM-DD HH:mm"
                                 />

@@ -8,6 +8,7 @@ import {
     ThunderboltOutlined,
     ExportOutlined,
     OrderedListOutlined,
+    CheckSquareOutlined,
 } from "@ant-design/icons";
 import {
     Anchor,
@@ -1111,6 +1112,27 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             />
                             {students.length > 0 && (
                                 <Flex gap={10}>
+                                    <Tooltip placement="top" title="选择反转">
+                                        <Button
+                                            icon={<CheckSquareOutlined />}
+                                            size="small"
+                                            onClick={() => {
+                                                const new_students_info = {
+                                                    ...students_info,
+                                                };
+                                                for (const key in new_students_info) {
+                                                    new_students_info[
+                                                        key
+                                                    ].activated =
+                                                        !new_students_info[key]
+                                                            .activated;
+                                                }
+                                                setStudentsInfo(
+                                                    new_students_info
+                                                );
+                                            }}
+                                        />
+                                    </Tooltip>
                                     <Tooltip
                                         placement="top"
                                         title="复制学生列表"

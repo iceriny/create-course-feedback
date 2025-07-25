@@ -810,92 +810,107 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                                 }}
                                                 gap={5}
                                             >
-                                                <Button
-                                                    style={{ padding: 12 }}
-                                                    size="small"
-                                                    type="link"
-                                                    onClick={() => {
-                                                        set([
-                                                            pickerDate[0].subtract(
-                                                                1,
-                                                                "day"
-                                                            ),
-                                                            pickerDate[1].subtract(
-                                                                1,
-                                                                "day"
-                                                            ),
-                                                        ]);
-                                                    }}
+                                                <Tooltip
+                                                    title="当前选择日期的昨天"
+                                                    mouseEnterDelay={0.6}
                                                 >
-                                                    昨天
-                                                </Button>
-                                                <Button
-                                                    style={{ padding: 12 }}
-                                                    size="small"
-                                                    type="link"
-                                                    onClick={() => {
-                                                        set([
-                                                            pickerDate[0].subtract(
-                                                                1,
-                                                                "week"
-                                                            ),
-                                                            pickerDate[1].subtract(
-                                                                1,
-                                                                "week"
-                                                            ),
-                                                        ]);
-                                                    }}
+                                                    <Button
+                                                        style={{ padding: 12 }}
+                                                        size="small"
+                                                        type="link"
+                                                        onClick={() => {
+                                                            set([
+                                                                pickerDate[0].subtract(
+                                                                    1,
+                                                                    "day"
+                                                                ),
+                                                                pickerDate[1].subtract(
+                                                                    1,
+                                                                    "day"
+                                                                ),
+                                                            ]);
+                                                        }}
+                                                    >
+                                                        昨天
+                                                    </Button>
+                                                </Tooltip>
+                                                <Tooltip
+                                                    title="当前选择日期的前一周同一天"
+                                                    mouseEnterDelay={0.6}
                                                 >
-                                                    上周
-                                                </Button>
-                                                <Button
-                                                    style={{ padding: 12 }}
-                                                    size="small"
-                                                    type="primary"
-                                                    onClick={() => {
-                                                        let start =
-                                                            dayjs().startOf(
-                                                                "day"
-                                                            );
-                                                        let end =
-                                                            dayjs().startOf(
-                                                                "day"
-                                                            );
-                                                        console.log(
-                                                            "pickerDate",
-                                                            pickerDate
-                                                        );
-                                                        start = start
-                                                            .set(
-                                                                "hour",
-                                                                pickerDate[0].hour()
-                                                            )
-                                                            .set(
-                                                                "minute",
-                                                                pickerDate[0].minute()
-                                                            )
-                                                            .set(
-                                                                "second",
-                                                                pickerDate[0].second()
-                                                            );
-                                                        end = end
-                                                            .set(
-                                                                "hour",
-                                                                pickerDate[1].hour()
-                                                            )
-                                                            .set(
-                                                                "minute",
-                                                                pickerDate[1].minute()
-                                                            )
-                                                            .set(
-                                                                "second",
-                                                                pickerDate[1].second()
-                                                            );
-                                                        set([start, end]);
-                                                    }}
+                                                    <Button
+                                                        style={{ padding: 12 }}
+                                                        size="small"
+                                                        type="link"
+                                                        onClick={() => {
+                                                            set([
+                                                                pickerDate[0].subtract(
+                                                                    1,
+                                                                    "week"
+                                                                ),
+                                                                pickerDate[1].subtract(
+                                                                    1,
+                                                                    "week"
+                                                                ),
+                                                            ]);
+                                                        }}
+                                                    >
+                                                        上周
+                                                    </Button>
+                                                </Tooltip>
+                                                <Tooltip
+                                                    title="将选择的日期设置为今天"
+                                                    mouseEnterDelay={0.6}
                                                 >
-                                                    本日
-                                                </Button>
+                                                    <Button
+                                                        style={{ padding: 12 }}
+                                                        size="small"
+                                                        type="primary"
+                                                        onClick={() => {
+                                                            let start =
+                                                                dayjs().startOf(
+                                                                    "day"
+                                                                );
+                                                            let end =
+                                                                dayjs().startOf(
+                                                                    "day"
+                                                                );
+                                                            console.log(
+                                                                "pickerDate",
+                                                                pickerDate
+                                                            );
+                                                            start = start
+                                                                .set(
+                                                                    "hour",
+                                                                    pickerDate[0].hour()
+                                                                )
+                                                                .set(
+                                                                    "minute",
+                                                                    pickerDate[0].minute()
+                                                                )
+                                                                .set(
+                                                                    "second",
+                                                                    pickerDate[0].second()
+                                                                );
+                                                            end = end
+                                                                .set(
+                                                                    "hour",
+                                                                    pickerDate[1].hour()
+                                                                )
+                                                                .set(
+                                                                    "minute",
+                                                                    pickerDate[1].minute()
+                                                                )
+                                                                .set(
+                                                                    "second",
+                                                                    pickerDate[1].second()
+                                                                );
+                                                            set([start, end]);
+                                                        }}
+                                                    >
+                                                        本日
+                                                    </Button>
+                                                </Tooltip>
                                             </Flex>
                                         );
                                     }}

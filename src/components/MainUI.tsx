@@ -43,6 +43,7 @@ import {
 } from "react";
 import { v4 as uuid_v4 } from "uuid";
 import { API, type ModelType } from "../AI_API";
+import { downloadJson } from "../utilities";
 
 // 导入子组件
 const StringListInput = lazy(() => import("./StringListInput"));
@@ -104,6 +105,48 @@ const HISTORY_LENGTH = 20; // 历史记录的最大长度
 
 // 从DatePicker组件中解构出RangePicker组件
 const { RangePicker } = DatePicker;
+
+const ExportALLLocalStorage = () => {
+  console.log(
+    "=== EXPORT ALL LOCALSTORAGE ===\n--- Traversing with Object.keys ---"
+  );
+  const EXPORT_OBJECT: Record<string, string> = {};
+  const keys = Object.keys(localStorage);
+  keys.forEach((key) => {
+    try {
+      // 尝试获取并打印
+      const value = localStorage.getItem(key);
+      console.log(`--- PARSE ---\nKey: ${key},\nValue: ${value}\n------`);
+      EXPORT_OBJECT[key] = JSON.parse(value || "");
+    } catch (e) {
+      // 某些浏览器在特定模式下（如隐私模式）可能会在访问时抛出异常
+      console.error(`Could not get item with key: ${key}`, e);
+    }
+  });
+  console.log("\n--- EXPORTED ALL ---");
+  // 下载导出对象
+  downloadJson(
+    EXPORT_OBJECT,
+    `备份_${dayjs().format("YYYY-MM-DD-HH-mm")}.json`
+  );
+};
+const ImportLocalStorage = (file: File) => {
+  console.log("=== IMPORT LOCALSTORAGE ===");
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const content = event.target?.result as string;
+      const data = JSON.parse(content);
+      Object.keys(data).forEach((key) => {
+        localStorage.setItem(key, JSON.stringify(data[key]));
+      });
+      console.log("=== IMPORT SUCCESS ===");
+    } catch (error) {
+      console.error("导入失败:", error);
+    }
+  };
+  reader.readAsText(file);
+};
 
 // 定义组件Props接口
 interface MainUIProps {

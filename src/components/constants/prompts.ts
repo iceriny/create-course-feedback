@@ -2,9 +2,9 @@ import { PromptItems } from "../types";
 
 // AI提示词模板，用于生成课程反馈内容
 export const PROMPTS: PromptItems = {
-    programming: {
-        name: "编程",
-        prompt: `## 角色定位：编程教师
+  programming: {
+    name: "编程",
+    prompt: `## 角色定位：编程教师
 - 你是一位专注于小学和初高中学生编程教育的老师
 - 以下[方括号]内容为重点要求
 
@@ -29,10 +29,10 @@ export const PROMPTS: PromptItems = {
 ## 输出格式：
 请直接输出课堂表现文本，无需包含任何格式标记或额外内容
 不需要在文本中标记字数`,
-    },
-    robot: {
-        name: "机器人",
-        prompt: `## 角色定位：机器人(机械搭建)教师
+  },
+  robot: {
+    name: "机器人",
+    prompt: `## 角色定位：机器人(机械搭建)教师
 - 你是一位专注于小学和初高中学生机器人(机械搭建)的老师
 - 以下[方括号]内容为重点要求
 
@@ -52,5 +52,5 @@ export const PROMPTS: PromptItems = {
 
 ## 输出格式：
 请直接输出课堂表现文本，无需包含任何格式标记或额外内容`,
-    },
+  },
 } as const;

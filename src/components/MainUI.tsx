@@ -111,13 +111,13 @@ interface MainUIProps {
   sendMessage: (
     content: JointContent,
     duration?: number | VoidFunction,
-    onClose?: VoidFunction
+    onClose?: VoidFunction,
   ) => void;
   // 发送警告消息的函数
   sendWarning: (
     content: JointContent,
     duration?: number | VoidFunction,
-    onClose?: VoidFunction
+    onClose?: VoidFunction,
   ) => void;
 }
 
@@ -162,7 +162,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   });
   // 用于存储班级列表
   const [classList, setClasses] = useState<string[]>(
-    getLocalStorage("class-name")
+    getLocalStorage("class-name"),
   );
   // 标记表单是否已提交
   const isFinishedRef = useRef(false);
@@ -191,7 +191,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       localStorage.setItem("ai-model", JSON.stringify(model));
       API.setModel(model);
     },
-    [setModel]
+    [setModel],
   );
 
   // 修改useEffect中的预加载代码，确保在正确的时机加载
@@ -244,7 +244,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       navigator.clipboard.writeText(text);
       sendMessage("已导出到剪切板.");
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   // 处理表单提交的回调函数
@@ -401,7 +401,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         setStudentsInfo(new_students_info);
       }
     },
-    [class_form, sendMessage]
+    [class_form, sendMessage],
   );
 
   // 处理导入班级数据的回调函数
@@ -466,11 +466,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             const updatedInfo = { ...prevInfo };
             let _content = updatedInfo[index].content.replace(
               /(?:(?:\*\*)?课堂表现.*?(?::|：)(?:\*\*)?)(?::|：)?/,
-              ""
+              "",
             );
             _content = _content.replace(
               /\d{4}年 ?\d{1,2}月\d{1,2}(?:日|天)/,
-              ""
+              "",
             );
             _content = _content.replace(/哆啦人工智能小栈/, "");
             _content = _content.trim();
@@ -489,15 +489,15 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         // 课程模板
         { content: aiTemplateRef.current, role: "user" },
         // 学生姓名
-        { content: `学员姓名: ${students[index]}`, role: "user" },
+        { content: `学员姓名: ${students[index].replace("|", "")}`, role: "user" },
         // 学生课堂表现原始内容
         {
           content: content_form.getFieldValue(["content", index]) ?? "",
           role: "user",
-        }
+        },
       );
     },
-    [content_form, promptItems, promptKey, students]
+    [content_form, promptItems, promptKey, students],
   );
 
   // 处理AI优化学生课堂表现的回调函数
@@ -530,7 +530,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         });
       }
     },
-    [class_form, history]
+    [class_form, history],
   );
 
   // 复制单个学生内容（带模板）
@@ -547,13 +547,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       // 获取课程内容并格式化为列表
       const courseContents =
         get("course-contents")?.map(
-          (item: { item: string }) => `- ${item.item}\n`
+          (item: { item: string }) => `- ${item.item}\n`,
         ) || [];
 
       // 获取教学目标并格式化为列表
       const courseObjectives =
         get("course-objectives")?.map(
-          (item: { item: string }) => `- ${item.item}\n`
+          (item: { item: string }) => `- ${item.item}\n`,
         ) || [];
 
       // 获取课程时间范围
@@ -567,6 +567,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
       // 使用封装的替换函数处理模板
       const studentTemplate = replaceTemplate(exportTemplate, {
+        studentName: student,
         courseName,
         courseTime: time,
         courseContents,
@@ -587,7 +588,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       signature,
       students,
       students_info,
-    ]
+    ],
   );
 
   // 处理模板保存
@@ -605,7 +606,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       // 关闭模态框
       setIsTemplateModalVisible(false);
     },
-    []
+    [],
   );
 
   return (
@@ -766,7 +767,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                             <Button
                               icon={
                                 <CloseOutlined
-                                  style={{ color: token.colorError }}
+                                  style={{
+                                    color: token.colorError,
+                                  }}
                                 />
                               }
                               type="link"
@@ -778,7 +781,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                                 setHistory(newHistory);
                                 localStorage.setItem(
                                   "class-history",
-                                  JSON.stringify(newHistory)
+                                  JSON.stringify(newHistory),
                                 );
                               }}
                             />
@@ -895,7 +898,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       validator: async (_, contents) => {
                         if (!contents || contents.length < 1) {
                           return Promise.reject(
-                            new Error("至少需要有一个课程内容")
+                            new Error("至少需要有一个课程内容"),
                           );
                         }
                       },
@@ -954,7 +957,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       validator: async (_, objectives) => {
                         if (!objectives || objectives.length < 1) {
                           return Promise.reject(
-                            new Error("至少需要有一个课程目标")
+                            new Error("至少需要有一个课程目标"),
                           );
                         }
                       },
@@ -1010,12 +1013,29 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
               <StringListInput
                 values_={students}
                 activated_list_={Object.values(students_info).map(
-                  (student) => student.activated
+                  (student) => student.activated,
                 )}
-                onChange={(values) => {
+                onChange={(raw_values) => {
                   // 获取班级名称
                   const className = class_form.getFieldValue("class-name");
-                  if (!className) return;
+                  if (!className) {
+                    sendWarning("班级名不能为空！");
+                    return;
+                  }
+                  const values: string[] = [];
+                  for (const v of raw_values) {
+                    if (v.includes(",")) {
+                      const split_v = v.split(",");
+                      split_v.forEach((_item) => {
+                        const item = _item.trim();
+                        if (item !== "" && !values.includes(item)) {
+                          values.push(item);
+                        }
+                      });
+                    } else {
+                      values.push(v.trim());
+                    }
+                  }
                   // 为新增学生初始化内容
                   const new_students_info = {
                     ...students_info,
@@ -1035,7 +1055,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                   // 保存学生列表到本地存储
                   localStorage.setItem(
                     `${className}_std`,
-                    JSON.stringify(values)
+                    JSON.stringify(values),
                   );
                 }}
                 onClear={() => {
@@ -1087,7 +1107,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       size="small"
                       onClick={() => {
                         const new_students = [...students].sort((a, b) =>
-                          a.localeCompare(b)
+                          a.localeCompare(b),
                         );
                         setStudents(new_students);
                         const sortedStudents = Object.fromEntries(
@@ -1097,9 +1117,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                               value,
                             })) // 转换键为数字
                             .sort((a, b) =>
-                              a.value.name.localeCompare(b.value.name)
+                              a.value.name.localeCompare(b.value.name),
                             ) // 按 name 排序
-                            .map((item, index) => [index, item.value])
+                            .map((item, index) => [index, item.value]),
                         ) as Record<number, StudentsInfo>;
 
                         setStudentsInfo(sortedStudents);
@@ -1108,7 +1128,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         if (!className) return;
                         localStorage.setItem(
                           `${className}_std`,
-                          JSON.stringify(new_students)
+                          JSON.stringify(new_students),
                         );
                       }}
                     />
@@ -1121,7 +1141,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     >
                       {`${
                         Object.values(students_info).filter(
-                          (item) => item.activated
+                          (item) => item.activated,
                         ).length
                       }/${students.length}人`}
                     </Typography.Text>
@@ -1163,10 +1183,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 students.map((value, index) => {
                   return {
                     key: `student-content-anchor-${index}`,
-                    title: value,
+                    title: value.replace("|", ""),
                     href: `#student-content-${index}`,
                   };
-                })
+                }),
               )}
             />
           )}
@@ -1222,13 +1242,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           // 获取课程内容并格式化为列表
           const courseContents =
             get("course-contents")?.map(
-              (item: { item: string }) => `- ${item.item}\n`
+              (item: { item: string }) => `- ${item.item}\n`,
             ) || [];
 
           // 获取教学目标并格式化为列表
           const courseObjectives =
             get("course-objectives")?.map(
-              (item: { item: string }) => `- ${item.item}\n`
+              (item: { item: string }) => `- ${item.item}\n`,
             ) || [];
 
           // 获取课程时间范围
@@ -1240,10 +1260,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           let result = "";
           for (const [index, student] of students.entries()) {
             // 添加学生标题
-            result += `### ${student}\n`;
+            result += `### ${student.replace("|", "")}\n`;
 
             // 使用封装的替换函数处理模板
             const studentTemplate = replaceTemplate(exportTemplate, {
+              studentName: student,
               courseName,
               courseTime: time,
               courseContents,
@@ -1285,13 +1306,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           // 获取课程内容并格式化为列表
           const courseContents =
             get("course-contents")?.map(
-              (item: { item: string }) => `- ${item.item}\n`
+              (item: { item: string }) => `- ${item.item}\n`,
             ) || [];
 
           // 获取教学目标并格式化为列表
           const courseObjectives =
             get("course-objectives")?.map(
-              (item: { item: string }) => `- ${item.item}\n`
+              (item: { item: string }) => `- ${item.item}\n`,
             ) || [];
 
           // 获取课程时间范围
@@ -1308,10 +1329,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             )
               continue;
             // 添加学生标题
-            result += `### ${student}\n`;
+            result += `### ${student.replace("|", "")}\n`;
 
             // 使用封装的替换函数处理模板
             const studentTemplate = replaceTemplate(exportTemplate, {
+              studentName: student,
               courseName,
               courseTime: time,
               courseContents,

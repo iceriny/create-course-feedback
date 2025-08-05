@@ -23,7 +23,7 @@ import { savePromptToLocalStorage, downloadJson } from "../utils";
 const { useToken } = theme;
 const ExportALLLocalStorage = () => {
   console.log(
-    "=== EXPORT ALL LOCALSTORAGE ===\n--- Traversing with Object.keys ---"
+    "=== EXPORT ALL LOCALSTORAGE ===\n--- Traversing with Object.keys ---",
   );
   const EXPORT_OBJECT: Record<string, string> = {};
   const keys = Object.keys(localStorage);
@@ -43,7 +43,7 @@ const ExportALLLocalStorage = () => {
   // 下载导出对象
   downloadJson(
     EXPORT_OBJECT,
-    `备份_${dayjs().format("YYYY-MM-DD-HH-mm")}.json`
+    `备份_${dayjs().format("YYYY-MM-DD-HH-mm")}.json`,
   );
 };
 const ImportLocalStorage = (file: File) => {
@@ -77,7 +77,7 @@ interface SettingsDrawerProps {
   sendMessage: (
     content: JointContent,
     duration?: number | VoidFunction,
-    onClose?: VoidFunction
+    onClose?: VoidFunction,
   ) => void;
 }
 
@@ -99,10 +99,10 @@ const SettingsDrawer = memo(
     const { token } = useToken();
     const [provider, setProvider] = useState<ProviderType>(API.getProvider());
     const [customApiUrl, setCustomApiUrl] = useState<string>(
-      API.getCustomProviderConfig().apiUrl
+      API.getCustomProviderConfig().apiUrl,
     );
     const [customModelListUrl, setCustomModelListUrl] = useState<string>(
-      API.getCustomProviderConfig().modelListUrl
+      API.getCustomProviderConfig().modelListUrl,
     );
     useEffect(() => {
       const promptKey = localStorage.getItem("promptKey") as PromptType | null;
@@ -148,7 +148,7 @@ const SettingsDrawer = memo(
       setTimeout(() => {
         if (API.isCustomModelAllowed()) {
           sendMessage(
-            "未能获取模型列表或供应商不支持模型列表API，请手动输入模型名称"
+            "未能获取模型列表或供应商不支持模型列表API，请手动输入模型名称",
           );
         }
       }, 2000);
@@ -467,7 +467,7 @@ const SettingsDrawer = memo(
         </Flex>
       </Drawer>
     );
-  }
+  },
 );
 
 export default SettingsDrawer;

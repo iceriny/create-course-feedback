@@ -4,40 +4,40 @@ import { StudentsInfo } from "./types";
 
 // 学生列表组件属性接口
 interface StudentsListProps {
-    students: string[];
-    students_info: { [key: number]: StudentsInfo };
-    handleSingleAIOptimize: (index: number) => void;
-    copyToClipboard: (text: string) => void;
-    copyStudentWithTemplate: (index: number) => void;
+  students: string[];
+  students_info: { [key: number]: StudentsInfo };
+  handleSingleAIOptimize: (index: number) => void;
+  copyToClipboard: (text: string) => void;
+  copyStudentWithTemplate: (index: number) => void;
 }
 
 /**
  * 学生列表组件
  */
 const StudentsList = memo(
-    ({
-        students,
-        students_info,
-        handleSingleAIOptimize,
-        copyToClipboard,
-        copyStudentWithTemplate,
-    }: StudentsListProps) => {
-        return (
-            <>
-                {students.map((student, index) => (
-                    <StudentContentCard
-                        key={`student-card-${index}`}
-                        student={student}
-                        index={index}
-                        studentInfo={students_info[index]}
-                        handleSingleAIOptimize={handleSingleAIOptimize}
-                        copyToClipboard={copyToClipboard}
-                        copyStudentWithTemplate={copyStudentWithTemplate}
-                    />
-                ))}
-            </>
-        );
-    }
+  ({
+    students,
+    students_info,
+    handleSingleAIOptimize,
+    copyToClipboard,
+    copyStudentWithTemplate,
+  }: StudentsListProps) => {
+    return (
+      <>
+        {students.map((student, index) => (
+          <StudentContentCard
+            key={`student-card-${index}`}
+            student={student.replace("|", "")}
+            index={index}
+            studentInfo={students_info[index]}
+            handleSingleAIOptimize={handleSingleAIOptimize}
+            copyToClipboard={copyToClipboard}
+            copyStudentWithTemplate={copyStudentWithTemplate}
+          />
+        ))}
+      </>
+    );
+  },
 );
 
 export default StudentsList;

@@ -59,25 +59,18 @@ export default defineConfig({
     sourcemap: process.env.NODE_ENV === "development", // 开发环境启用 sourcemap
     rollupOptions: {
       output: {
-        // 优化代码分割策略
+        // 优化代码分割策略 - 将 React 和 Ant Design 打包在一起以避免兼容性问题
         manualChunks: (id: string) => {
-          // React 和 React-DOM 必须放在同一个 chunk 中
+          // React 和 Ant Design 相关库打包在一起（React 19 兼容性要求）
           if (
             id.includes("react") ||
             id.includes("react-dom") ||
-            id.includes("react/")
-          ) {
-            return "vendor-react";
-          }
-
-          // Ant Design 相关
-          if (
             id.includes("antd") ||
             id.includes("@ant-design") ||
             id.includes("rc-") ||
             id.includes("@rc-component")
           ) {
-            return "vendor-antd";
+            return "vendor-react-antd";
           }
 
           // dayjs 单独打包

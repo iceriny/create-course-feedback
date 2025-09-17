@@ -14,6 +14,7 @@ import {
   Anchor,
   Button,
   Card,
+  Checkbox,
   Col,
   ConfigProvider,
   DatePicker,
@@ -57,6 +58,7 @@ import {
   PromptItem,
   PromptType,
   StudentsInfo,
+  type StudentContentPropsVersion,
 } from "./types";
 
 // 导入常量和工具函数
@@ -139,6 +141,15 @@ const preloadComponents = () => {
   });
 };
 
+const getStudentContentV2Text = (
+  total: string,
+  mastery_situation: string,
+  attention: string,
+  interaction: string,
+) => {
+  return `整体表现${total},掌握情况${mastery_situation},专注度${attention},参与度${interaction}`;
+};
+
 /**
  * 主页组件
  */
@@ -147,6 +158,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   const [class_form] = Form.useForm();
   // 创建学生内容表单实例
   const [content_form] = Form.useForm();
+  // 学生内容表单的版本
+  const [content_form_version, setContentFormVersion] =
+    useState<StudentContentPropsVersion>("v2");
   // 学生列表状态
   const [students, setStudents] = useState<string[]>([]);
   // 用于存储每个学生的信息
@@ -353,7 +367,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
   // 导入班级数据
   const importClass = useCallback(
-    (key: string) => {
+    (key: string, updateClassName = false) => {
       const data = localStorage.getItem(key);
       if (data) {
         // 解析数据并设置表单字段值
@@ -374,9 +388,16 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           .hour(old_last_time.hour())
           .minute(old_last_time.minute());
 
-        class_form.setFieldsValue({
+        const fieldsToUpdate: { [key: string]: [dayjs.Dayjs, dayjs.Dayjs] | string } = {
           "course-time": [new_first_time, new_last_time],
-        });
+        };
+
+        // 如果需要更新班级名称（从选择器触发时）
+        if (updateClassName) {
+          fieldsToUpdate["class-name"] = key;
+        }
+
+        class_form.setFieldsValue(fieldsToUpdate);
       } else {
         // 未找到数据时发送提示消息
         sendMessage("未找到该班级的数据, 请检查班级名是否正确.");
@@ -489,15 +510,30 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         // 课程模板
         { content: aiTemplateRef.current, role: "user" },
         // 学生姓名
-        { content: `学员姓名: ${students[index].replace("|", "")}`, role: "user" },
+        {
+          content: `学员姓名: ${students[index].replace("|", "")}`,
+          role: "user",
+        },
         // 学生课堂表现原始内容
         {
-          content: content_form.getFieldValue(["content", index]) ?? "",
+          content:
+            content_form_version === "v1"
+              ? (content_form.getFieldValue(["content", index]) ?? "")
+              : getStudentContentV2Text(
+                  content_form.getFieldValue(["content", index, "total"]),
+                  content_form.getFieldValue([
+                    "content",
+                    index,
+                    "mastery_situation",
+                  ]),
+                  content_form.getFieldValue(["content", index, "attention"]),
+                  content_form.getFieldValue(["content", index, "interaction"]),
+                ),
           role: "user",
         },
       );
     },
-    [content_form, promptItems, promptKey, students],
+    [content_form, content_form_version, promptItems, promptKey, students],
   );
 
   // 处理AI优化学生课堂表现的回调函数
@@ -725,8 +761,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       style={{ width: 120 }}
                       onSelect={(value: string | null) => {
                         if (value !== null) {
-                          importClass(value);
-                          class_form.setFieldValue("class-name", value);
+                          importClass(value, true);
                         }
                       }}
                       options={classList.map((item) => ({
@@ -1154,11 +1189,57 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
         <Col span={2} />
         <Col span={16}>
+          {/* 学生内容卡片版本选择 */}
+          <Checkbox
+            checked={content_form_version === "v2"}
+            style={{ margin: "10px" }}
+            onChange={(e) => {
+              const newVersion = e.target.checked ? "v2" : "v1";
+              const currentFormData = content_form.getFieldsValue();
+
+              if (newVersion === "v2" && content_form_version === "v1") {
+                // 从V1切换到V2：将字符串转换为对象结构
+                const newContentData: { [key: number]: { total: string; mastery_situation: string; attention: string; interaction: string } } = {};
+                students.forEach((_, index) => {
+                  const v1Content = currentFormData.content?.[index];
+                  if (v1Content && typeof v1Content === 'string') {
+                    newContentData[index] = {
+                      total: v1Content,
+                      mastery_situation: "",
+                      attention: "",
+                      interaction: ""
+                    };
+                  }
+                });
+                if (Object.keys(newContentData).length > 0) {
+                  content_form.setFieldsValue({ content: newContentData });
+                }
+              } else if (newVersion === "v1" && content_form_version === "v2") {
+                // 从V2切换到V1：将对象结构转换为字符串
+                const newContentData: { [key: number]: string } = {};
+                students.forEach((_, index) => {
+                  const v2Content = currentFormData.content?.[index];
+                  if (v2Content && typeof v2Content === 'object') {
+                    const { total, mastery_situation, attention, interaction } = v2Content;
+                    newContentData[index] = getStudentContentV2Text(total || "", mastery_situation || "", attention || "", interaction || "");
+                  }
+                });
+                if (Object.keys(newContentData).length > 0) {
+                  content_form.setFieldsValue({ content: newContentData });
+                }
+              }
+
+              setContentFormVersion(newVersion);
+            }}
+          >
+            <span style={{ userSelect: "none" }}>V2版</span>
+          </Checkbox>
           {/* 学生内容表单 */}
           <Form form={content_form} name="student-content">
             {/* 使用优化后的学生列表组件 */}
             <Suspense fallback={<div>加载中...</div>}>
               <StudentsList
+                propsVersion={content_form_version}
                 students={students}
                 students_info={students_info}
                 handleSingleAIOptimize={handleSingleAIOptimize}

@@ -48,3 +48,6 @@ export interface TemplateEditorProps {
   initialSignature: string;
   sendMessage: (content: JointContent) => void;
 }
+
+// 学生信息卡片组件属性版本
+export type StudentContentPropsVersion = "v1" | "v2";

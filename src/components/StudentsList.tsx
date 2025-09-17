@@ -1,11 +1,12 @@
 import { memo } from "react";
 import StudentContentCard from "./StudentContentCard";
-import { StudentsInfo } from "./types";
+import { StudentsInfo, StudentContentPropsVersion } from "./types";
 
 // 学生列表组件属性接口
 interface StudentsListProps {
   students: string[];
   students_info: { [key: number]: StudentsInfo };
+  propsVersion: StudentContentPropsVersion;
   handleSingleAIOptimize: (index: number) => void;
   copyToClipboard: (text: string) => void;
   copyStudentWithTemplate: (index: number) => void;
@@ -18,6 +19,7 @@ const StudentsList = memo(
   ({
     students,
     students_info,
+    propsVersion,
     handleSingleAIOptimize,
     copyToClipboard,
     copyStudentWithTemplate,
@@ -26,6 +28,7 @@ const StudentsList = memo(
       <>
         {students.map((student, index) => (
           <StudentContentCard
+            propsVersion={propsVersion}
             key={`student-card-${index}`}
             student={student.replace("|", "")}
             index={index}

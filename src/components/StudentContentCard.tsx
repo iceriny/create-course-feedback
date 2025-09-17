@@ -11,7 +11,7 @@ import {
 } from "antd";
 import { memo } from "react";
 import CopyButton from "./CopyButton";
-import { StudentsInfo } from "./types";
+import { StudentsInfo, StudentContentPropsVersion } from "./types";
 
 const { useToken } = theme;
 
@@ -20,10 +20,31 @@ interface StudentContentCardProps {
   student: string;
   index: number;
   studentInfo: StudentsInfo;
+  propsVersion: StudentContentPropsVersion;
   handleSingleAIOptimize: (index: number) => void;
   copyToClipboard: (text: string) => void;
   copyStudentWithTemplate: (index: number) => void;
 }
+
+
+const StudentContentItem = [
+  {
+    itemKey: "total",
+    label: "整体表现",
+  },
+  {
+    itemKey: "mastery_situation",
+    label: "掌握情况",
+  },
+  {
+    itemKey: "attention",
+    label: "专注度",
+  },
+  {
+    itemKey: "interaction",
+    label: "互动",
+  },
+];
 
 /**
  * 单个学生内容卡片组件
@@ -33,6 +54,7 @@ const StudentContentCard = memo(
     student,
     index,
     studentInfo,
+    propsVersion,
     handleSingleAIOptimize,
     copyToClipboard,
     copyStudentWithTemplate,
@@ -89,18 +111,39 @@ const StudentContentCard = memo(
         }
       >
         {/* 学生课堂表现输入框 */}
-        <Form.Item name={["content", index]}>
-          <Input.TextArea
-            disabled={!studentInfo.activated}
-            size="small"
-            title="填写学生课堂表现关键词"
-            autoSize={{
-              minRows: 1,
-              maxRows: 12,
-            }}
-            style={{ padding: "8px" }}
-          />
-        </Form.Item>
+        {propsVersion === "v1" ? (
+          <Form.Item name={["content", index]}>
+            <Input.TextArea
+              disabled={!studentInfo.activated}
+              size="small"
+              title="填写学生课堂表现关键词"
+              autoSize={{
+                minRows: 1,
+                maxRows: 12,
+              }}
+              style={{ padding: "8px" }}
+            />
+          </Form.Item>
+        ) : (
+          StudentContentItem.map((item) =>
+            <Form.Item
+              key={`${index}-${item.itemKey}`}
+              name={["content", index, item.itemKey]}
+              label={item.label}
+              labelCol={{ span: 2 }}
+            >
+              <Input.TextArea
+                disabled={!studentInfo.activated}
+                size="small"
+                autoSize={{
+                  minRows: 1,
+                  maxRows: 12,
+                }}
+                style={{ padding: "8px" }}
+              />
+            </Form.Item>
+          )
+        )}
 
         {
           // 加载动画

@@ -1,4 +1,7 @@
+// Ant Design 图标 - 按需导入
 import { LoadingOutlined, ReloadOutlined } from "@ant-design/icons";
+
+// Ant Design 组件 - 按需导入
 import {
   Button,
   Card,
@@ -9,7 +12,11 @@ import {
   Typography,
   theme,
 } from "antd";
+
+// React hooks
 import { memo } from "react";
+
+// 内部组件和类型
 import CopyButton from "./CopyButton";
 import { StudentsInfo, StudentContentPropsVersion } from "./types";
 
@@ -44,6 +51,10 @@ const StudentContentItem = [
     itemKey: "interaction",
     label: "互动",
   },
+  {
+    itemKey: "other",
+    label: "其他",
+  }
 ];
 
 /**

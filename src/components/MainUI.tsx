@@ -1,3 +1,15 @@
+// React核心导入
+import {
+  FC,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  lazy,
+  Suspense,
+} from "react";
+
+// Ant Design图标 - 按需导入
 import {
   CloseOutlined,
   EditOutlined,
@@ -10,6 +22,8 @@ import {
   OrderedListOutlined,
   CheckSquareOutlined,
 } from "@ant-design/icons";
+
+// Ant Design核心组件
 import {
   Anchor,
   Button,
@@ -32,16 +46,9 @@ import {
   Typography,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
+
+// 工具库
 import dayjs from "dayjs";
-import {
-  FC,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  lazy,
-  Suspense,
-} from "react";
 import { v4 as uuid_v4 } from "uuid";
 import { API, type ModelType } from "../AI_API";
 
@@ -68,6 +75,8 @@ import {
   getLocalStorage,
   getPromptFromLocalStorage,
   replaceTemplate,
+  batchGetLocalStorage,
+  safeJsonParse,
 } from "../utils";
 
 // 定义默认模板
@@ -126,19 +135,36 @@ interface MainUIProps {
 // 从theme中解构出useToken钩子
 const { useToken } = theme;
 
-// 修改预加载函数，确保组件正确初始化
+// 智能预加载函数 - 使用 requestIdleCallback 在空闲时预加载
 const preloadComponents = () => {
-  // 预加载所有懒加载组件
-  const promises = [
-    import("./StringListInput"),
-    import("./SettingsDrawer"),
-    import("./StudentsList"),
-  ];
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      const promises = [
+        import("./StringListInput"),
+        import("./SettingsDrawer"),
+        import("./StudentsList"),
+        import("./TemplateEditor"),
+      ];
 
-  // 不关心结果，只是为了预加载
-  Promise.all(promises).catch((error) => {
-    console.error("组件预加载失败:", error);
-  });
+      Promise.all(promises).catch((error) => {
+        console.error("组件预加载失败:", error);
+      });
+    }, { timeout: 2000 });
+  } else {
+    // 降级到 setTimeout
+    setTimeout(() => {
+      const promises = [
+        import("./StringListInput"),
+        import("./SettingsDrawer"),
+        import("./StudentsList"),
+        import("./TemplateEditor"),
+      ];
+
+      Promise.all(promises).catch((error) => {
+        console.error("组件预加载失败:", error);
+      });
+    }, 1000);
+  }
 };
 
 const getStudentContentV2Text = (
@@ -146,8 +172,9 @@ const getStudentContentV2Text = (
   mastery_situation: string,
   attention: string,
   interaction: string,
+  other: string,
 ) => {
-  return `整体表现${total},掌握情况${mastery_situation},专注度${attention},参与度${interaction}`;
+  return `整体表现${total},掌握情况${mastery_situation},专注度${attention},参与度${interaction},其他${other}`;
 };
 
 /**
@@ -208,45 +235,49 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     [setModel],
   );
 
-  // 修改useEffect中的预加载代码，确保在正确的时机加载
+  // 优化初始化加载 - 使用批量操作和错误处理
   useEffect(() => {
-    const h = localStorage.getItem("class-history");
-    if (h) {
-      setHistory(JSON.parse(h));
+    const localStorageKeys = [
+      "class-history",
+      "feedback-template",
+      "signature",
+      "ai-model"
+    ];
+
+    // 使用优化的批量读取函数
+    const localStorageData = batchGetLocalStorage(localStorageKeys);
+
+    // 批量设置状态（React 18 自动批处理）
+    const historyData = safeJsonParse(localStorageData["class-history"], {});
+    if (Object.keys(historyData).length > 0) {
+      setHistory(historyData);
     }
 
-    // 加载保存的模板和签名
-    const savedTemplate = localStorage.getItem("feedback-template");
-    if (savedTemplate) {
-      setCustomTemplate(savedTemplate);
-      setExportTemplate(savedTemplate);
+    if (localStorageData["feedback-template"]) {
+      setCustomTemplate(localStorageData["feedback-template"]);
+      setExportTemplate(localStorageData["feedback-template"]);
     }
 
-    const savedSignature = localStorage.getItem("signature");
-    if (savedSignature) {
-      setSignature(savedSignature);
+    if (localStorageData["signature"]) {
+      setSignature(localStorageData["signature"]);
     }
 
-    // 确保DOM已经渲染
-    const timer = setTimeout(() => {
-      preloadComponents();
-    }, 1000);
+    const modelData = safeJsonParse(localStorageData["ai-model"], null);
+    if (modelData) {
+      setModel(modelData);
+      API.setModel(modelData);
+    }
 
-    // 添加节流状态监听器
-    // const api = getAPI();
+    // API 监听器设置
     const unsubscribe = API.addThrottleListener((isThrottled, message) => {
       setIsThrottled(isThrottled);
       setThrottleMessage(message);
     });
 
-    const aiModel = localStorage.getItem("ai-model");
-    if (aiModel) {
-      setModel(JSON.parse(aiModel));
-      API.setModel(JSON.parse(aiModel));
-    }
+    // 延迟预加载组件
+    preloadComponents();
 
     return () => {
-      clearTimeout(timer);
       unsubscribe();
     };
   }, []);
@@ -433,7 +464,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       sendWarning("请先输入班级名.");
       return;
     }
-
     importClass(key);
   }, [class_form, importClass, sendWarning]);
 
@@ -528,6 +558,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                   ]),
                   content_form.getFieldValue(["content", index, "attention"]),
                   content_form.getFieldValue(["content", index, "interaction"]),
+                  content_form.getFieldValue(["content", index, "other"]),
                 ),
           role: "user",
         },
@@ -1199,7 +1230,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
               if (newVersion === "v2" && content_form_version === "v1") {
                 // 从V1切换到V2：将字符串转换为对象结构
-                const newContentData: { [key: number]: { total: string; mastery_situation: string; attention: string; interaction: string } } = {};
+                const newContentData: { [key: number]: { total: string; mastery_situation: string; attention: string; interaction: string; other: string } } = {};
                 students.forEach((_, index) => {
                   const v1Content = currentFormData.content?.[index];
                   if (v1Content && typeof v1Content === 'string') {
@@ -1207,7 +1238,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       total: v1Content,
                       mastery_situation: "",
                       attention: "",
-                      interaction: ""
+                      interaction: "",
+                      other: ""
                     };
                   }
                 });
@@ -1220,8 +1252,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 students.forEach((_, index) => {
                   const v2Content = currentFormData.content?.[index];
                   if (v2Content && typeof v2Content === 'object') {
-                    const { total, mastery_situation, attention, interaction } = v2Content;
-                    newContentData[index] = getStudentContentV2Text(total || "", mastery_situation || "", attention || "", interaction || "");
+                    const { total, mastery_situation, attention, interaction, other } = v2Content;
+                    newContentData[index] = getStudentContentV2Text(total || "", mastery_situation || "", attention || "", interaction || "", other || "");
                   }
                 });
                 if (Object.keys(newContentData).length > 0) {

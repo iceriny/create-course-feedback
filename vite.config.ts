@@ -12,54 +12,106 @@ const packageJson = JSON.parse(
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      // 减少 babel 插件以提升构建速度
+      babel: {
+        plugins: [],
+      },
+    }),
     svgr({ svgrOptions: { icon: true } }),
-    visualizer({ open: true }),
+    // 只在构建时启用 visualizer
+    ...(process.env.NODE_ENV === "production"
+      ? [
+          visualizer({
+            filename: "dist/stats.html",
+            open: false,
+            gzipSize: true,
+            brotliSize: true,
+          }),
+        ]
+      : []),
   ],
   base: "/",
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },
+  // 开发服务器优化
+  server: {
+    hmr: {
+      overlay: false, // 关闭错误覆盖层以提升性能
+    },
+  },
+  // 优化依赖预构建
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "antd",
+      "dayjs",
+      "uuid",
+      "@ant-design/icons",
+    ],
+    exclude: ["@ant-design/v5-patch-for-react-19"],
+  },
   build: {
+    // 构建性能优化
+    target: "esnext", // 使用现代 JS 语法减少打包体积
+    sourcemap: process.env.NODE_ENV === "development", // 开发环境启用 sourcemap
     rollupOptions: {
       output: {
+        // 优化代码分割策略
         manualChunks: (id: string) => {
-          // 将React和Ant Design所有相关代码打包在一起
+          // React 和 React-DOM 必须放在同一个 chunk 中
           if (
             id.includes("react") ||
             id.includes("react-dom") ||
+            id.includes("react/")
+          ) {
+            return "vendor-react";
+          }
+
+          // Ant Design 相关
+          if (
             id.includes("antd") ||
             id.includes("@ant-design") ||
             id.includes("rc-") ||
             id.includes("@rc-component")
           ) {
-            return "vendor-react-antd";
+            return "vendor-antd";
           }
 
-          // dayjs单独打包
+          // dayjs 单独打包
           if (id.includes("dayjs")) {
             return "vendor-dayjs";
           }
 
-          // 其他node_modules模块，不要过度分割，可以按大类分组
+          // 其他小型依赖合并
           if (id.includes("node_modules")) {
-            // 对于小型依赖，统一打包到一个common vendor chunk
             return "vendor-others";
           }
         },
+        // 优化文件名
+        chunkFileNames: "assets/[name]-[hash].js",
       },
     },
-    // 设置chunk大小警告的限制值（kB）
-    chunkSizeWarningLimit: 1500,
-    // 开启代码压缩
+    // 设置更合理的 chunk 大小警告
+    chunkSizeWarningLimit: 1000,
+    // 启用代码压缩
     minify: "terser",
     terserOptions: {
       compress: {
-        drop_console: true, // 移除console
-        drop_debugger: true, // 移除debugger
+        drop_console: process.env.NODE_ENV === "production", // 生产环境移除 console
+        drop_debugger: true,
+        pure_funcs:
+          process.env.NODE_ENV === "production" ? ["console.log"] : [],
+      },
+      mangle: {
+        safari10: true, // 兼容 Safari 10
       },
     },
-    // 启用CSS代码分割
+    // CSS 代码分割
     cssCodeSplit: true,
+    // 启用 CSS 压缩
+    cssMinify: true,
   },
 });

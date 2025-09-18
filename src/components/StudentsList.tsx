@@ -1,6 +1,7 @@
 import { memo } from "react";
 import StudentContentCard from "./StudentContentCard";
 import { StudentsInfo, StudentBasicInfo } from "./types";
+import type { JointContent } from "antd/es/message/interface";
 
 // 学生列表组件属性接口
 interface StudentsListProps {
@@ -12,6 +13,7 @@ interface StudentsListProps {
   copyStudentWithTemplate: (index: number) => void;
   onUpdateStudentGender: (index: number, gender: "male" | "female") => void;
   onUpdateStudentVersion: (index: number, version: "v1" | "v2") => void;
+  sendWarning: (content: JointContent, duration?: number | VoidFunction, onClose?: VoidFunction) => void;
 }
 
 /**
@@ -27,6 +29,7 @@ const StudentsList = memo(
     copyStudentWithTemplate,
     onUpdateStudentGender,
     onUpdateStudentVersion,
+    sendWarning,
   }: StudentsListProps) => {
     return (
       <>
@@ -42,11 +45,13 @@ const StudentsList = memo(
               index={index}
               studentInfo={studentInfo}
               className={className}
+              totalStudents={students.length}
               handleSingleAIOptimize={handleSingleAIOptimize}
               copyToClipboard={copyToClipboard}
               copyStudentWithTemplate={copyStudentWithTemplate}
               onUpdateStudentGender={onUpdateStudentGender}
               onUpdateStudentVersion={onUpdateStudentVersion}
+              sendWarning={sendWarning}
             />
           );
         })}

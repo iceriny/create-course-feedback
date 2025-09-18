@@ -58,7 +58,7 @@ import {
 } from "./types";
 
 // 导入自定义Hook
-import { useStudentsManager } from "../hooks/useStudentsManager";
+import { useStudentsManager } from "../hooks";
 
 // 导入常量和工具函数
 import { PROMPTS } from "./constants";
@@ -829,6 +829,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       updateStudentVersion(index, version, className);
                     }
                   }}
+                  sendWarning={sendWarning}
                 />
               </Suspense>
             </Form>

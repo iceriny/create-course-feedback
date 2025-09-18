@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo } from "react";
 import { Flex, theme } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 

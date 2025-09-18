@@ -33,6 +33,8 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
     event,
   ) => {
     const element = event.target as HTMLInputElement;
+    event.preventDefault();
+    event.stopPropagation();
     onPressEnter?.(element.value, index);
   };
   const handleBackspace: React.KeyboardEventHandler<HTMLInputElement> = (
@@ -42,6 +44,8 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
       event.key === "Backspace" &&
       (event.target as HTMLInputElement).value === ""
     ) {
+      event.preventDefault();
+      event.stopPropagation();
       onBackspace?.(index);
     }
   };

@@ -61,7 +61,7 @@ export default defineConfig({
       output: {
         // 优化代码分割策略 - 将 React 和 Ant Design 打包在一起以避免兼容性问题
         manualChunks: (id: string) => {
-          // React 和 Ant Design 相关库打包在一起（React 19 兼容性要求）
+          // React 和 Ant Design 相关库打包在一起
           if (
             id.includes("react") ||
             id.includes("react-dom") ||

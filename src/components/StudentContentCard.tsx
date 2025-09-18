@@ -3,38 +3,48 @@ import { LoadingOutlined, ReloadOutlined } from "@ant-design/icons";
 
 // Ant Design 组件 - 按需导入
 import {
+  AutoComplete,
   Button,
   Card,
   Collapse,
   Flex,
   Form,
-  Input,
   Typography,
+  Select,
   theme,
 } from "antd";
 
 // React hooks
-import { memo } from "react";
+import React, { memo, useState, useCallback } from "react";
 
 // 内部组件和类型
 import CopyButton from "./CopyButton";
-import { StudentsInfo, StudentContentPropsVersion } from "./types";
+import { StudentsInfo, StudentBasicInfo } from "./types";
+import { nextFocus } from "../utils";
+import { V1InputSuggestionManager, V2QuickOptionsManager } from "../utils/inputAssistant";
 
 const { useToken } = theme;
 
 // 单个学生内容卡片组件属性接口
 interface StudentContentCardProps {
-  student: string;
+  student: StudentBasicInfo;
   index: number;
   studentInfo: StudentsInfo;
-  propsVersion: StudentContentPropsVersion;
+  className: string; // 班级名，用于输入联想
   handleSingleAIOptimize: (index: number) => void;
   copyToClipboard: (text: string) => void;
   copyStudentWithTemplate: (index: number) => void;
+  onUpdateStudentGender: (index: number, gender: "male" | "female") => void;
+  onUpdateStudentVersion: (index: number, version: "v1" | "v2") => void;
 }
 
-
-const StudentContentItem = [
+export type StudentContentItemKey = "total" | "mastery_situation" | "attention" | "interaction" | "other";
+export type StudentContentItemLabel = "整体表现" | "掌握情况" | "专注度" | "互动" | "其他";
+export interface StudentContentItemProps {
+  itemKey: StudentContentItemKey;
+  label: StudentContentItemLabel;
+}
+const StudentContentItem: StudentContentItemProps[] = [
   {
     itemKey: "total",
     label: "整体表现",
@@ -65,12 +75,42 @@ const StudentContentCard = memo(
     student,
     index,
     studentInfo,
-    propsVersion,
+    className,
     handleSingleAIOptimize,
     copyToClipboard,
     copyStudentWithTemplate,
+    onUpdateStudentGender,
+    onUpdateStudentVersion,
   }: StudentContentCardProps) => {
     const { token } = useToken();
+
+    // V1版本输入联想状态
+    const [v1Suggestions, setV1Suggestions] = useState<string[]>([]);
+
+    // V2版本快捷选项
+    const v2Options = V2QuickOptionsManager.getOptions();
+
+    // 处理V1输入变化，提供联想建议
+    const handleV1InputChange = useCallback((value: string) => {
+      if (student.version === "v1" && className) {
+        const suggestions = V1InputSuggestionManager.searchSuggestions(className, value);
+        setV1Suggestions(suggestions);
+      }
+    }, [student.version, className]);
+
+    // 处理V1输入确认，保存到建议库
+    const handleV1InputBlur = useCallback((value: string) => {
+      if (student.version === "v1" && className && value.trim()) {
+        V1InputSuggestionManager.addSuggestion(className, value.trim());
+      }
+    }, [student.version, className]);
+
+    // 处理V2输入确认，保存到快捷选项库
+    const handleV2InputBlur = useCallback((field: keyof typeof v2Options, value: string) => {
+      if (student.version === "v2" && value.trim()) {
+        V2QuickOptionsManager.addCustomOption(field, value.trim());
+      }
+    }, [student.version]);
 
     return (
       <Card
@@ -82,17 +122,43 @@ const StudentContentCard = memo(
         key={index}
         size="small"
         title={
-          <Flex justify="space-between">
-            <Typography.Text style={{ alignContent: "center" }}>
-              <span
-                style={{
-                  marginRight: "20px",
+          <Flex justify="space-between" align="center">
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <Typography.Text style={{ alignContent: "center", marginRight: "20px" }}>
+                <span
+                  style={{
+                    marginRight: "20px",
+                  }}
+                >
+                  {index + 1}
+                </span>
+                {student.name}
+              </Typography.Text>
+              <Select
+                size="small"
+                style={{ width: 80, marginRight: 10 }}
+                options={[
+                  { label: "男", value: "male" },
+                  { label: "女", value: "female" }
+                ]}
+                value={student.gender}
+                onChange={(value: "male" | "female") => {
+                  onUpdateStudentGender(index, value);
                 }}
-              >
-                {index + 1}
-              </span>
-              {student}
-            </Typography.Text>
+              />
+              <Select
+                size="small"
+                style={{ width: 60 }}
+                options={[
+                  { label: "V1", value: "v1" },
+                  { label: "V2", value: "v2" }
+                ]}
+                value={student.version}
+                onChange={(value: "v1" | "v2") => {
+                  onUpdateStudentVersion(index, value);
+                }}
+              />
+            </div>
             <div
               style={{
                 display: "inline-flex",
@@ -122,35 +188,117 @@ const StudentContentCard = memo(
         }
       >
         {/* 学生课堂表现输入框 */}
-        {propsVersion === "v1" ? (
+        {student.version === "v1" ? (
           <Form.Item name={["content", index]}>
-            <Input.TextArea
+            <AutoComplete
+              id={`student-content-input-${index}`}
               disabled={!studentInfo.activated}
               size="small"
-              title="填写学生课堂表现关键词"
-              autoSize={{
-                minRows: 1,
-                maxRows: 12,
+              placeholder="填写学生课堂表现关键词（支持输入联想）"
+              options={v1Suggestions.map((suggestion, suggestionIndex) => ({
+                key: `v1-${index}-${suggestionIndex}-${suggestion}`,
+                value: suggestion
+              }))}
+              onSearch={handleV1InputChange}
+              onBlur={(e) => handleV1InputBlur((e.target as HTMLInputElement).value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  const inputElement = event.target as HTMLInputElement;
+                  handleV1InputBlur(inputElement.value);
+                  const target = document.getElementById(
+                      `student-content-input-${index + 1}`,
+                  ) as HTMLInputElement;
+                  if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                      // TODO: 提示为最后一个输入框
+                      console.log("success");
+                  }
+                }
+                if (event.key === "Backspace" && (event.target as HTMLInputElement).value === "") {
+                    const target = document.getElementById(
+                        `student-content-input-${index - 1}`,
+                    ) as HTMLInputElement;
+                    if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                        // TODO: 提示为第一个输入框
+                        console.log("success");
+                    }
+                }
               }}
-              style={{ padding: "8px" }}
             />
           </Form.Item>
         ) : (
-          StudentContentItem.map((item) =>
+          // v2版本
+          StudentContentItem.map((item, i) =>
             <Form.Item
               key={`${index}-${item.itemKey}`}
               name={["content", index, item.itemKey]}
               label={item.label}
               labelCol={{ span: 2 }}
             >
-              <Input.TextArea
+              <AutoComplete
+                id={`student-content-input-${index}-${i}`}
                 disabled={!studentInfo.activated}
-                size="small"
-                autoSize={{
-                  minRows: 1,
-                  maxRows: 12,
+                size="middle"
+                style={{ width: '100%' }}
+                placeholder={`输入${item.label}内容（支持快捷选项）`}
+                options={v2Options[item.itemKey].map((option, optionIndex) => ({
+                  key: `${item.itemKey}-${optionIndex}-${option}`,
+                  value: option
+                }))}
+                onBlur={(e) => handleV2InputBlur(item.itemKey, (e.target as HTMLInputElement).value)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      const inputElement = event.target as HTMLInputElement;
+                      handleV2InputBlur(item.itemKey, inputElement.value);
+
+                      if (event.shiftKey) {
+                          return;
+                      }
+                      if (event.altKey) {
+                          const target = document.getElementById(
+                              `student-content-input-${index}-${i - 1}`,
+                          ) as HTMLInputElement;
+                          if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                              // TODO: 提示为第一个输入框
+                              console.log("success");
+                          }
+                      }
+                      else {
+                      const target = document.getElementById(
+                          `student-content-input-${index}-${i + 1}`,
+                      ) as HTMLInputElement;
+                      if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                          // TODO: 提示为最后一个输入框
+                          console.log("success");
+                      } else {
+                          const target = document.getElementById(
+                              `student-content-input-${index + 1}-${0}`,
+                          ) as HTMLInputElement;
+                          if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                              // TODO: 提示为最后一个输入框
+                              console.log("success");
+                              }
+                          }
+                      }
+                    }
+                    if (event.key === "Backspace" && (event.target as HTMLInputElement).value === "") {
+                        const target = document.getElementById(
+                            `student-content-input-${index}-${i - 1}`,
+                        ) as HTMLInputElement;
+                        if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                            // TODO: 提示为第一个输入框
+                            console.log("success");
+                        }
+                        else {
+                            const target = document.getElementById(
+                                `student-content-input-${index + 1}-${0}`,
+                            ) as HTMLInputElement;
+                            if (target && nextFocus(event as React.KeyboardEvent<HTMLInputElement>, target)) {
+                                // TODO: 提示为最后一个输入框
+                                console.log("success");
+                            }
+                        }
+                    }
                 }}
-                style={{ padding: "8px" }}
               />
             </Form.Item>
           )

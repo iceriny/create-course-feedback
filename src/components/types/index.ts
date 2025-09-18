@@ -1,6 +1,13 @@
 import type { JointContent } from "antd/es/message/interface";
 
-// 学生信息接口
+// 学生基础信息接口 (静态信息)
+export interface StudentBasicInfo {
+  name: string;
+  gender: "male" | "female";
+  version: StudentContentPropsVersion; // 每个学生独立的版本选择
+}
+
+// 学生动态信息接口 (运行时状态)
 export interface StudentsInfo {
   name: string;
   content: string;
@@ -29,7 +36,11 @@ export interface HistorysType {
 }
 
 // 提示词类型
-export type PromptType = "programming" | "robot";
+export type PromptType =
+  | "programming"
+  | "programming_v2"
+  | "robot"
+  | "robot_v2";
 
 // 提示词项接口
 export interface PromptItem {
@@ -51,3 +62,17 @@ export interface TemplateEditorProps {
 
 // 学生信息卡片组件属性版本
 export type StudentContentPropsVersion = "v1" | "v2";
+
+// V1版本的输入联想数据接口
+export interface V1InputSuggestions {
+  [className: string]: string[]; // 班级名对应的所有输入建议
+}
+
+// V2版本的快捷选项数据接口
+export interface V2QuickOptions {
+  total: string[];
+  mastery_situation: string[];
+  attention: string[];
+  interaction: string[];
+  other: string[];
+}

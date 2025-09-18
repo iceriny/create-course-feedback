@@ -11,13 +11,9 @@ import {
 
 // Ant Design图标 - 按需导入
 import {
-  CloseOutlined,
-  EditOutlined,
   EllipsisOutlined,
   FileTextFilled,
-  InfoCircleFilled,
   LoadingOutlined,
-  ThunderboltOutlined,
   ExportOutlined,
   OrderedListOutlined,
   CheckSquareOutlined,
@@ -27,18 +23,12 @@ import {
 import {
   Anchor,
   Button,
-  Card,
-  Checkbox,
   Col,
   ConfigProvider,
-  DatePicker,
   Flex,
   FloatButton,
   Form,
-  Input,
   Row,
-  Select,
-  Space,
   Spin,
   Tag,
   theme,
@@ -57,6 +47,7 @@ const StringListInput = lazy(() => import("./StringListInput"));
 const SettingsDrawer = lazy(() => import("./SettingsDrawer"));
 const StudentsList = lazy(() => import("./StudentsList"));
 const TemplateEditor = lazy(() => import("./TemplateEditor"));
+const CourseInfoCard = lazy(() => import("./CourseInfoCard"));
 
 // 导入类型
 import {
@@ -64,9 +55,10 @@ import {
   HistorysType,
   PromptItem,
   PromptType,
-  StudentsInfo,
-  type StudentContentPropsVersion,
 } from "./types";
+
+// 导入自定义Hook
+import { useStudentsManager } from "../hooks/useStudentsManager";
 
 // 导入常量和工具函数
 import { PROMPTS } from "./constants";
@@ -113,8 +105,6 @@ const HISTORY_LENGTH = 20; // 历史记录的最大长度
 // 定义可用的占位符
 // const PLACEHOLDERS = {...};
 
-// 从DatePicker组件中解构出RangePicker组件
-const { RangePicker } = DatePicker;
 
 // 定义组件Props接口
 interface MainUIProps {
@@ -144,6 +134,7 @@ const preloadComponents = () => {
         import("./SettingsDrawer"),
         import("./StudentsList"),
         import("./TemplateEditor"),
+        import("./CourseInfoCard"),
       ];
 
       Promise.all(promises).catch((error) => {
@@ -158,6 +149,7 @@ const preloadComponents = () => {
         import("./SettingsDrawer"),
         import("./StudentsList"),
         import("./TemplateEditor"),
+        import("./CourseInfoCard"),
       ];
 
       Promise.all(promises).catch((error) => {
@@ -185,15 +177,22 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   const [class_form] = Form.useForm();
   // 创建学生内容表单实例
   const [content_form] = Form.useForm();
-  // 学生内容表单的版本
-  const [content_form_version, setContentFormVersion] =
-    useState<StudentContentPropsVersion>("v2");
-  // 学生列表状态
-  const [students, setStudents] = useState<string[]>([]);
-  // 用于存储每个学生的信息
-  const [students_info, setStudentsInfo] = useState<{
-    [key: number]: StudentsInfo;
-  }>({});
+
+  // 使用学生管理Hook
+  const {
+    studentsList,
+    studentsInfo,
+    loadStudentsFromStorage,
+    updateStudentsFromRawValues,
+    updateStudentGender,
+    updateStudentVersion,
+    updateStudentInfo,
+    clearAllStudents,
+    toggleAllStudentsActivation,
+    sortStudentsByName,
+    getStudentNames,
+    getActivatedStudentsCount,
+  } = useStudentsManager();
   // 提示词Key
   const [promptKey, setPromptKey] = useState<PromptType>("programming");
   // 提示词内容
@@ -434,26 +433,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         sendMessage("未找到该班级的数据, 请检查班级名是否正确.");
       }
       // 从本地存储获取学生列表
-      const students_str = localStorage.getItem(`${key}_std`);
-      if (students_str) {
-        // 设置学生列表状态
-        const _students: string[] = JSON.parse(students_str);
-        setStudents(_students);
-        // 为新增学生初始化内容
-        const new_students_info: { [key: number]: StudentsInfo } = {};
-        for (const [index, value] of _students.entries()) {
-          new_students_info[index] = {
-            name: value,
-            content: "",
-            think_content: "",
-            loading: false,
-            activated: true,
-          };
-        }
-        setStudentsInfo(new_students_info);
-      }
+      loadStudentsFromStorage(key);
     },
-    [class_form, sendMessage],
+    [class_form, sendMessage, loadStudentsFromStorage],
   );
 
   // 处理导入班级数据的回调函数
@@ -467,18 +449,35 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     importClass(key);
   }, [class_form, importClass, sendWarning]);
 
+  // 处理班级选择
+  const handleClassSelect = useCallback(
+    (className: string) => {
+      importClass(className, true);
+    },
+    [importClass]
+  );
+
+  // 处理历史记录删除
+  const handleHistoryDelete = useCallback(
+    (key: string) => {
+      const newHistory = {
+        ...history,
+      };
+      delete newHistory[key];
+      setHistory(newHistory);
+      localStorage.setItem(
+        "class-history",
+        JSON.stringify(newHistory),
+      );
+    },
+    [history]
+  );
+
   // 处理单次AI调用
   const handleSingleAIOptimize = useCallback(
     (index: number) => {
-      // 创建一个对象更新函数，避免更新整个students_info对象
-      setStudentsInfo((prevInfo) => {
-        const updatedInfo = { ...prevInfo };
-        updatedInfo[index] = {
-          ...updatedInfo[index],
-          loading: true,
-        };
-        return updatedInfo;
-      });
+      // 设置学生为加载状态
+      updateStudentInfo(index, { loading: true });
 
       // 调用AI API发送消息
       new API().sendMessage(
@@ -486,53 +485,40 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         (content, type) => {
           if (type === null || content === null) return;
 
-          // 使用函数式更新，只更新特定学生的内容
-          setStudentsInfo((prevInfo) => {
-            const updatedInfo = { ...prevInfo };
-
-            switch (type) {
-              case "content":
-                updatedInfo[index] = {
-                  ...updatedInfo[index],
-                  content: content,
-                };
-                break;
-              case "reasoning_content":
-                updatedInfo[index] = {
-                  ...updatedInfo[index],
-                  think_content: content,
-                };
-                break;
-              default:
-                console.warn("未知的type");
-                break;
-            }
-
-            return updatedInfo;
-          });
+          // 更新特定学生的内容
+          switch (type) {
+            case "content":
+              updateStudentInfo(index, { content });
+              break;
+            case "reasoning_content":
+              updateStudentInfo(index, { think_content: content });
+              break;
+            default:
+              console.warn("未知的type");
+              break;
+          }
         },
         // `完成`回调
         () => {
-          setStudentsInfo((prevInfo) => {
-            const updatedInfo = { ...prevInfo };
-            let _content = updatedInfo[index].content.replace(
+          // 使用函数式更新来获取最新的状态
+          updateStudentInfo(index, (prevInfo) => {
+            const currentContent = prevInfo.content || "";
+            let cleanedContent = currentContent.replace(
               /(?:(?:\*\*)?课堂表现.*?(?::|：)(?:\*\*)?)(?::|：)?/,
               "",
             );
-            _content = _content.replace(
+            cleanedContent = cleanedContent.replace(
               /\d{4}年 ?\d{1,2}月\d{1,2}(?:日|天)/,
               "",
             );
-            _content = _content.replace(/哆啦人工智能小栈/, "");
-            _content = _content.trim();
+            cleanedContent = cleanedContent.replace(/哆啦人工智能小栈/, "");
+            cleanedContent = cleanedContent.trim();
 
-            updatedInfo[index] = {
-              ...updatedInfo[index],
-              content: _content,
-              loading: false,
+            return {
+              ...prevInfo,
+              content: cleanedContent,
+              loading: false
             };
-
-            return updatedInfo;
           });
         },
         // 系统提示词
@@ -541,30 +527,35 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         { content: aiTemplateRef.current, role: "user" },
         // 学生姓名
         {
-          content: `学员姓名: ${students[index].replace("|", "")}`,
+          content: `学员姓名: ${studentsList[index]?.name || ""}`,
           role: "user",
         },
         // 学生课堂表现原始内容
         {
           content:
-            content_form_version === "v1"
+            studentsList[index]?.version === "v1"
               ? (content_form.getFieldValue(["content", index]) ?? "")
-              : getStudentContentV2Text(
-                  content_form.getFieldValue(["content", index, "total"]),
-                  content_form.getFieldValue([
-                    "content",
-                    index,
-                    "mastery_situation",
-                  ]),
-                  content_form.getFieldValue(["content", index, "attention"]),
-                  content_form.getFieldValue(["content", index, "interaction"]),
-                  content_form.getFieldValue(["content", index, "other"]),
-                ),
+              : (() => {
+                  // 调试输出
+                  const formValues = content_form.getFieldsValue();
+                  console.log(`学生${index}的表单数据:`, formValues);
+                  console.log(`学生${index}的content字段:`, formValues.content?.[index]);
+
+                  const total = content_form.getFieldValue(["content", index, "total"]) ?? "";
+                  const mastery = content_form.getFieldValue(["content", index, "mastery_situation"]) ?? "";
+                  const attention = content_form.getFieldValue(["content", index, "attention"]) ?? "";
+                  const interaction = content_form.getFieldValue(["content", index, "interaction"]) ?? "";
+                  const other = content_form.getFieldValue(["content", index, "other"]) ?? "";
+
+                  console.log(`学生${index}各字段值:`, {total, mastery, attention, interaction, other});
+
+                  return getStudentContentV2Text(total, mastery, attention, interaction, other);
+                })(),
           role: "user",
         },
       );
     },
-    [content_form, content_form_version, promptItems, promptKey, students],
+    [content_form, promptItems, promptKey, studentsList, updateStudentInfo],
   );
 
   // 处理AI优化学生课堂表现的回调函数
@@ -578,12 +569,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       return;
     }
     // 遍历学生列表
-    for (const [index] of students.entries()) {
-      if (students_info[index].activated) {
+    for (const [index] of studentsList.entries()) {
+      if (studentsInfo[index]?.activated) {
         handleSingleAIOptimize(index);
       }
     }
-  }, [handleSingleAIOptimize, sendWarning, students, students_info]);
+  }, [handleSingleAIOptimize, sendWarning, studentsList, studentsInfo]);
 
   // 加载历史数据
   const handleLoadHistoryData = useCallback(
@@ -626,21 +617,22 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       // 获取课程时间范围
       const time = get("course-time") as [dayjs.Dayjs, dayjs.Dayjs] | undefined;
 
-      // 获取学生名称
-      const student = students[index];
+      // 获取学生信息
+      const student = studentsList[index];
+      if (!student) return;
 
       // 添加学生标题
-      let result = `### ${student}\n`;
+      let result = `### ${student.name}\n`;
 
       // 使用封装的替换函数处理模板
       const studentTemplate = replaceTemplate(exportTemplate, {
-        studentName: student,
+        studentName: student.name,
         courseName,
         courseTime: time,
         courseContents,
         courseObjectives,
         signature,
-        courseFeedback: students_info[index]?.content || "",
+        courseFeedback: studentsInfo[index]?.content || "",
       });
 
       result += studentTemplate;
@@ -653,8 +645,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       copyToClipboard,
       exportTemplate,
       signature,
-      students,
-      students_info,
+      studentsList,
+      studentsInfo,
     ],
   );
 
@@ -679,7 +671,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   return (
     <>
       {/* 设置抽屉 */}
-      <Suspense fallback={<div>加载中...</div>}>
+      <Suspense fallback={
+        <Spin size="large" />
+      }>
         <SettingsDrawer
           open={open}
           setOpen={setOpen}
@@ -694,7 +688,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       </Suspense>
 
       {/* 模板编辑器 */}
-      <Suspense fallback={<div>加载中...</div>}>
         <TemplateEditor
           isOpen={isTemplateModalVisible}
           onClose={() => setIsTemplateModalVisible(false)}
@@ -703,7 +696,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           initialSignature={signature}
           sendMessage={sendMessage}
         />
-      </Suspense>
 
       {/* 主体内容 */}
       <Row gutter={[72, 64]}>
@@ -721,441 +713,54 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             initialValues={{ items: [{}] }}
           >
             {/* 课程信息卡片 */}
-            <Card
-              id="course-info-card"
-              size="default"
-              title={
-                <>
-                  <InfoCircleFilled
-                    style={{
-                      marginRight: "2rem",
-                      color: token.colorPrimary,
-                    }}
-                  />
-                  课程信息
-                </>
-              }
-              style={{
-                minWidth: "800px",
-                boxShadow: "10px 10px 80px 10px rgba(0, 0, 0, 0.1)",
-              }}
-              actions={[
-                // 提交按钮
-                <Button
-                  key="submit"
-                  style={{ width: "100%" }}
-                  type="link"
-                  htmlType="submit"
-                >
-                  提交
-                </Button>,
-                // AI优化按钮
-                <Button key="ai" type="link" onClick={handleAIOptimize}>
-                  <ThunderboltOutlined />
-                  AI 优化
-                </Button>,
-                // 导入按钮
-                <Button
-                  key="import"
-                  style={{ width: "100%" }}
-                  type="link"
-                  onClick={handleImport}
-                >
-                  导入
-                </Button>,
-                // 自定义模板按钮
-                <Button
-                  key="template"
-                  style={{ width: "100%" }}
-                  type="link"
-                  onClick={() => {
-                    setIsTemplateModalVisible(true);
-                  }}
-                >
-                  <EditOutlined />
-                  自定义模板
-                </Button>,
-              ]}
-            >
-              {/* 班级名 表单项 */}
-              <Form.Item
-                label="班级名"
-                name="class-name"
-                rules={[{ required: true }]}
-              >
-                <Input
-                  addonAfter={
-                    <Select
-                      defaultValue={null}
-                      notFoundContent="无录入班级信息"
-                      placeholder="选择班级"
-                      style={{ width: 120 }}
-                      onSelect={(value: string | null) => {
-                        if (value !== null) {
-                          importClass(value, true);
-                        }
-                      }}
-                      options={classList.map((item) => ({
-                        value: item,
-                        label: item,
-                      }))}
-                    />
-                  }
-                />
-              </Form.Item>
-
-              {/* 课程名称 表单项 */}
-              <Form.Item
-                label="课程名称"
-                name="course-name"
-                rules={[{ required: true }]}
-              >
-                <Input
-                  addonAfter={
-                    <Select
-                      defaultValue={null}
-                      notFoundContent="无历史记录"
-                      placeholder="历史记录"
-                      style={{ width: 200 }}
-                      onSelect={(value: string | null) => {
-                        if (value !== null) {
-                          handleLoadHistoryData(value);
-                        }
-                      }}
-                      optionRender={(options) => {
-                        const value = options?.value;
-                        if (!value) return null;
-                        return (
-                          <Flex gap={10} align="center">
-                            {options.data.label.length > 10
-                              ? options.data.label.slice(0, 10) + "..."
-                              : options.data.label}
-                            <Button
-                              icon={
-                                <CloseOutlined
-                                  style={{
-                                    color: token.colorError,
-                                  }}
-                                />
-                              }
-                              type="link"
-                              onClick={() => {
-                                const newHistory = {
-                                  ...history,
-                                };
-                                delete newHistory[value];
-                                setHistory(newHistory);
-                                localStorage.setItem(
-                                  "class-history",
-                                  JSON.stringify(newHistory),
-                                );
-                              }}
-                            />
-                          </Flex>
-                        );
-                      }}
-                      options={Object.keys(history).map((key) => ({
-                        value: key,
-                        label: history[key].courseName,
-                      }))}
-                    />
-                  }
-                />
-              </Form.Item>
-
-              {/* 授课时间 表单项 */}
-              <Form.Item
-                label="授课时间"
-                name="course-time"
-                rules={[{ required: true }]}
-              >
-                <RangePicker
-                  needConfirm={false}
-                  renderExtraFooter={() => {
-                    const pickerDate: dayjs.Dayjs[] =
-                      class_form.getFieldValue("course-time");
-                    const set = (date: dayjs.Dayjs[]) => {
-                      class_form.setFieldValue("course-time", date);
-                    };
-                    return (
-                      <Flex
-                        style={{
-                          width: "100%",
-                          margin: "12px 0",
-                          justifyContent: "end",
-                        }}
-                        gap={5}
-                      >
-                        <Tooltip
-                          title="当前选择日期的昨天"
-                          mouseEnterDelay={0.6}
-                        >
-                          <Button
-                            style={{ padding: 12 }}
-                            size="small"
-                            type="link"
-                            onClick={() => {
-                              set([
-                                pickerDate[0].subtract(1, "day"),
-                                pickerDate[1].subtract(1, "day"),
-                              ]);
-                            }}
-                          >
-                            昨天
-                          </Button>
-                        </Tooltip>
-                        <Tooltip
-                          title="当前选择日期的前一周同一天"
-                          mouseEnterDelay={0.6}
-                        >
-                          <Button
-                            style={{ padding: 12 }}
-                            size="small"
-                            type="link"
-                            onClick={() => {
-                              set([
-                                pickerDate[0].subtract(1, "week"),
-                                pickerDate[1].subtract(1, "week"),
-                              ]);
-                            }}
-                          >
-                            上周
-                          </Button>
-                        </Tooltip>
-                        <Tooltip
-                          title="将选择的日期设置为今天"
-                          mouseEnterDelay={0.6}
-                        >
-                          <Button
-                            style={{ padding: 12 }}
-                            size="small"
-                            type="primary"
-                            onClick={() => {
-                              let start = dayjs().startOf("day");
-                              let end = dayjs().startOf("day");
-                              console.log("pickerDate", pickerDate);
-                              start = start
-                                .set("hour", pickerDate[0].hour())
-                                .set("minute", pickerDate[0].minute())
-                                .set("second", pickerDate[0].second());
-                              end = end
-                                .set("hour", pickerDate[1].hour())
-                                .set("minute", pickerDate[1].minute())
-                                .set("second", pickerDate[1].second());
-                              set([start, end]);
-                            }}
-                          >
-                            本日
-                          </Button>
-                        </Tooltip>
-                      </Flex>
-                    );
-                  }}
-                  showTime={{ format: "HH:mm" }}
-                  format="YYYY-MM-DD HH:mm"
-                />
-              </Form.Item>
-              {/* 课程内容表单项 */}
-              <Form.Item label="课程内容">
-                <Form.List
-                  name="course-contents"
-                  rules={[
-                    {
-                      validator: async (_, contents) => {
-                        if (!contents || contents.length < 1) {
-                          return Promise.reject(
-                            new Error("至少需要有一个课程内容"),
-                          );
-                        }
-                      },
-                    },
-                  ]}
-                >
-                  {(fields, opt, { errors }) => (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        rowGap: 16,
-                      }}
-                    >
-                      {/* 遍历课程内容字段 */}
-                      {fields.map((subField) => (
-                        <Space key={subField.key}>
-                          <Form.Item
-                            noStyle
-                            name={[subField.name, "item"]}
-                            rules={[{ required: true }]}
-                          >
-                            <Input
-                              style={{
-                                width: 350,
-                              }}
-                              onPressEnter={() => {
-                                opt.add();
-                              }}
-                              placeholder="填写课程内容"
-                            />
-                          </Form.Item>
-                          {/* 删除按钮 */}
-                          <CloseOutlined
-                            onClick={() => {
-                              opt.remove(subField.name);
-                            }}
-                          />
-                        </Space>
-                      ))}
-                      {/* 添加课程内容按钮 */}
-                      <Button type="dashed" onClick={() => opt.add()} block>
-                        + 添加课程内容
-                      </Button>
-                      <Form.ErrorList errors={errors} />
-                    </div>
-                  )}
-                </Form.List>
-              </Form.Item>
-              {/* 教学目标表单项 */}
-              <Form.Item label="教学目标">
-                <Form.List
-                  name="course-objectives"
-                  rules={[
-                    {
-                      validator: async (_, objectives) => {
-                        if (!objectives || objectives.length < 1) {
-                          return Promise.reject(
-                            new Error("至少需要有一个课程目标"),
-                          );
-                        }
-                      },
-                    },
-                  ]}
-                >
-                  {(fields, opt, { errors }) => (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        rowGap: 16,
-                      }}
-                    >
-                      {fields.map((subField) => (
-                        <Space key={subField.key}>
-                          <Form.Item
-                            noStyle
-                            name={[subField.name, "item"]}
-                            rules={[{ required: true }]}
-                          >
-                            <Input
-                              style={{
-                                width: 350,
-                              }}
-                              placeholder="填写课程内容"
-                            />
-                          </Form.Item>
-                          {/* 删除按钮 */}
-                          <CloseOutlined
-                            onClick={() => {
-                              opt.remove(subField.name);
-                            }}
-                          />
-                        </Space>
-                      ))}
-                      {/* 添加课程内容按钮 */}
-                      <Button type="dashed" onClick={() => opt.add()} block>
-                        + 添加课程内容
-                      </Button>
-                      <Form.ErrorList errors={errors} />
-                    </div>
-                  )}
-                </Form.List>
-              </Form.Item>
-            </Card>
+            <Suspense fallback={<Spin size="large" />}>
+              <CourseInfoCard
+                form={class_form}
+                classList={classList}
+                history={history}
+                onSubmit={handleSubmit}
+                onImport={handleImport}
+                onAIOptimize={handleAIOptimize}
+                onTemplateEdit={() => setIsTemplateModalVisible(true)}
+                onClassSelect={handleClassSelect}
+                onHistoryLoad={handleLoadHistoryData}
+                onHistoryDelete={handleHistoryDelete}
+              />
+            </Suspense>
           </Form>
         </Col>
         <Col span={6}>
           {/* 学生列表输入组件 */}
-          <Suspense fallback={<div>加载中...</div>}>
+          <Suspense fallback={
+            <Spin size="large" />
+          }>
             <Flex vertical gap={10}>
               <StringListInput
-                values_={students}
-                activated_list_={Object.values(students_info).map(
+                values_={getStudentNames()}
+                activated_list_={Object.values(studentsInfo).map(
                   (student) => student.activated,
                 )}
                 onChange={(raw_values) => {
-                  // 获取班级名称
-                  const className = class_form.getFieldValue("class-name");
-                  if (!className) {
-                    sendWarning("班级名不能为空！");
-                    return;
+                  try {
+                    // 获取班级名称
+                    const className = class_form.getFieldValue("class-name");
+                    updateStudentsFromRawValues(raw_values, className);
+                  } catch (error) {
+                    sendWarning(error instanceof Error ? error.message : "发生未知错误");
                   }
-                  const values: string[] = [];
-                  for (const v of raw_values) {
-                    if (v.includes(",")) {
-                      const split_v = v.split(",");
-                      split_v.forEach((_item) => {
-                        const item = _item.trim();
-                        if (item !== "" && !values.includes(item)) {
-                          values.push(item);
-                        }
-                      });
-                    } else {
-                      values.push(v.trim());
-                    }
-                  }
-                  // 为新增学生初始化内容
-                  const new_students_info = {
-                    ...students_info,
-                  };
-                  for (const [index, value] of values.entries()) {
-                    new_students_info[index] = {
-                      name: value,
-                      content: "",
-                      think_content: "",
-                      loading: false,
-                      activated: true,
-                    };
-                  }
-                  setStudentsInfo(new_students_info);
-                  // 更新学生列表状态
-                  setStudents(values);
-                  // 保存学生列表到本地存储
-                  localStorage.setItem(
-                    `${className}_std`,
-                    JSON.stringify(values),
-                  );
                 }}
-                onClear={() => {
-                  // 清空学生内容引用和学生列表
-                  setStudentsInfo({});
-                  setStudents([]);
-                }}
+                onClear={clearAllStudents}
                 onActive={(index, activated_list) => {
-                  setStudentsInfo((prevInfo) => {
-                    const updatedInfo = { ...prevInfo };
-                    updatedInfo[index] = {
-                      ...updatedInfo[index],
-                      activated: activated_list[index],
-                    };
-                    return updatedInfo;
-                  });
+                  updateStudentInfo(index, { activated: activated_list[index] });
                 }}
               />
-              {students.length > 0 && (
+              {studentsList.length > 0 && (
                 <Flex gap={10}>
                   <Tooltip placement="top" title="选择反转">
                     <Button
                       icon={<CheckSquareOutlined />}
                       size="small"
-                      onClick={() => {
-                        const new_students_info = {
-                          ...students_info,
-                        };
-                        for (const key in new_students_info) {
-                          new_students_info[key].activated =
-                            !new_students_info[key].activated;
-                        }
-                        setStudentsInfo(new_students_info);
-                      }}
+                      onClick={toggleAllStudentsActivation}
                     />
                   </Tooltip>
                   <Tooltip placement="top" title="复制学生列表">
@@ -1163,7 +768,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       icon={<ExportOutlined />}
                       size="small"
                       onClick={() => {
-                        copyToClipboard(students.join(", "));
+                        copyToClipboard(getStudentNames().join(", "));
                       }}
                     />
                   </Tooltip>
@@ -1172,30 +777,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       icon={<OrderedListOutlined />}
                       size="small"
                       onClick={() => {
-                        const new_students = [...students].sort((a, b) =>
-                          a.localeCompare(b),
-                        );
-                        setStudents(new_students);
-                        const sortedStudents = Object.fromEntries(
-                          Object.entries(students_info)
-                            .map(([key, value]) => ({
-                              key: Number(key),
-                              value,
-                            })) // 转换键为数字
-                            .sort((a, b) =>
-                              a.value.name.localeCompare(b.value.name),
-                            ) // 按 name 排序
-                            .map((item, index) => [index, item.value]),
-                        ) as Record<number, StudentsInfo>;
-
-                        setStudentsInfo(sortedStudents);
-                        const className =
-                          class_form.getFieldValue("class-name");
+                        const className = class_form.getFieldValue("class-name");
                         if (!className) return;
-                        localStorage.setItem(
-                          `${className}_std`,
-                          JSON.stringify(new_students),
-                        );
+                        sortStudentsByName(className);
                       }}
                     />
                   </Tooltip>
@@ -1205,11 +789,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                         textAlign: "center",
                       }}
                     >
-                      {`${
-                        Object.values(students_info).filter(
-                          (item) => item.activated,
-                        ).length
-                      }/${students.length}人`}
+                      {(() => {
+                        const { activated, total } = getActivatedStudentsCount();
+                        return `${activated}/${total}人`;
+                      })()}
                     </Typography.Text>
                   </Tooltip>
                 </Flex>
@@ -1220,70 +803,40 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
         <Col span={2} />
         <Col span={16}>
-          {/* 学生内容卡片版本选择 */}
-          <Checkbox
-            checked={content_form_version === "v2"}
-            style={{ margin: "10px" }}
-            onChange={(e) => {
-              const newVersion = e.target.checked ? "v2" : "v1";
-              const currentFormData = content_form.getFieldsValue();
-
-              if (newVersion === "v2" && content_form_version === "v1") {
-                // 从V1切换到V2：将字符串转换为对象结构
-                const newContentData: { [key: number]: { total: string; mastery_situation: string; attention: string; interaction: string; other: string } } = {};
-                students.forEach((_, index) => {
-                  const v1Content = currentFormData.content?.[index];
-                  if (v1Content && typeof v1Content === 'string') {
-                    newContentData[index] = {
-                      total: v1Content,
-                      mastery_situation: "",
-                      attention: "",
-                      interaction: "",
-                      other: ""
-                    };
-                  }
-                });
-                if (Object.keys(newContentData).length > 0) {
-                  content_form.setFieldsValue({ content: newContentData });
-                }
-              } else if (newVersion === "v1" && content_form_version === "v2") {
-                // 从V2切换到V1：将对象结构转换为字符串
-                const newContentData: { [key: number]: string } = {};
-                students.forEach((_, index) => {
-                  const v2Content = currentFormData.content?.[index];
-                  if (v2Content && typeof v2Content === 'object') {
-                    const { total, mastery_situation, attention, interaction, other } = v2Content;
-                    newContentData[index] = getStudentContentV2Text(total || "", mastery_situation || "", attention || "", interaction || "", other || "");
-                  }
-                });
-                if (Object.keys(newContentData).length > 0) {
-                  content_form.setFieldsValue({ content: newContentData });
-                }
-              }
-
-              setContentFormVersion(newVersion);
-            }}
-          >
-            <span style={{ userSelect: "none" }}>V2版</span>
-          </Checkbox>
           {/* 学生内容表单 */}
-          <Form form={content_form} name="student-content">
-            {/* 使用优化后的学生列表组件 */}
-            <Suspense fallback={<div>加载中...</div>}>
-              <StudentsList
-                propsVersion={content_form_version}
-                students={students}
-                students_info={students_info}
-                handleSingleAIOptimize={handleSingleAIOptimize}
-                copyToClipboard={copyToClipboard}
-                copyStudentWithTemplate={handleCopyStudentWithTemplate}
-              />
-            </Suspense>
-          </Form>
+          {studentsList.length > 0 && (
+            <Form form={content_form} name="student-content">
+              {/* 使用优化后的学生列表组件 */}
+              <Suspense fallback={
+                  <Spin size="large" />
+              }>
+                <StudentsList
+                  students={studentsList}
+                  students_info={studentsInfo}
+                  className={class_form.getFieldValue("class-name") || ""}
+                  handleSingleAIOptimize={handleSingleAIOptimize}
+                  copyToClipboard={copyToClipboard}
+                  copyStudentWithTemplate={handleCopyStudentWithTemplate}
+                  onUpdateStudentGender={(index, gender) => {
+                    const className = class_form.getFieldValue("class-name");
+                    if (className) {
+                      updateStudentGender(index, gender, className);
+                    }
+                  }}
+                  onUpdateStudentVersion={(index, version) => {
+                    const className = class_form.getFieldValue("class-name");
+                    if (className) {
+                      updateStudentVersion(index, version, className);
+                    }
+                  }}
+                />
+              </Suspense>
+            </Form>
+          )}
         </Col>
         {/* 侧边锚点 */}
         <Col span={6}>
-          {students.length > 0 && (
+          {studentsList.length > 0 && (
             <Anchor
               offsetTop={100}
               items={[
@@ -1293,10 +846,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                   href: "#course-info-card",
                 },
               ].concat(
-                students.map((value, index) => {
+                studentsList.map((student, index) => {
                   return {
                     key: `student-content-anchor-${index}`,
-                    title: value.replace("|", ""),
+                    title: student.name,
                     href: `#student-content-${index}`,
                   };
                 }),
@@ -1371,19 +924,19 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
           // 构建导出结果
           let result = "";
-          for (const [index, student] of students.entries()) {
+          for (const [index, student] of studentsList.entries()) {
             // 添加学生标题
-            result += `### ${student.replace("|", "")}\n`;
+            result += `### ${student.name}\n`;
 
             // 使用封装的替换函数处理模板
             const studentTemplate = replaceTemplate(exportTemplate, {
-              studentName: student,
+              studentName: student.name,
               courseName,
               courseTime: time,
               courseContents,
               courseObjectives,
               signature,
-              courseFeedback: students_info[index]?.content || "",
+              courseFeedback: studentsInfo[index]?.content || "",
             });
 
             result += studentTemplate;
@@ -1435,24 +988,24 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
           // 构建导出结果
           let result = "";
-          for (const [index, student] of students.entries()) {
+          for (const [index, student] of studentsList.entries()) {
             if (
-              students_info[index]?.content === "" ||
-              !students_info[index]?.activated
+              studentsInfo[index]?.content === "" ||
+              !studentsInfo[index]?.activated
             )
               continue;
             // 添加学生标题
-            result += `### ${student.replace("|", "")}\n`;
+            result += `### ${student.name}\n`;
 
             // 使用封装的替换函数处理模板
             const studentTemplate = replaceTemplate(exportTemplate, {
-              studentName: student,
+              studentName: student.name,
               courseName,
               courseTime: time,
               courseContents,
               courseObjectives,
               signature,
-              courseFeedback: students_info[index]?.content || "",
+              courseFeedback: studentsInfo[index]?.content || "",
             });
 
             result += studentTemplate;

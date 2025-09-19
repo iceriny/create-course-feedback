@@ -1,6 +1,11 @@
 # 课程反馈生成工具
 
-![版本](https://img.shields.io/badge/版本-0.5.1-blue.svg)
+![正式版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ficeriny%2Fcreate-course-feedback%2Frefs%2Fheads%2Fmain%2Fpackage.json&query=%24.version&label=%E6%AD%A3%E5%BC%8F%E7%89%88&color=blue&link=https%3A%2F%2Ffb.teaching.misssu.cn%2F)
+![正式版](https://img.shields.io/github/actions/workflow/status/iceriny/create-course-feedback/main.yml?label=正式版&color=blue)
+
+![开发版](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ficeriny%2Fcreate-course-feedback%2Frefs%2Fheads%2Fdev%2Fpackage.json&query=%24.version&label=开发版&color=green&link=https%3A%2F%2Ffb.teaching.misssu.cn%2F)
+![开发版](https://img.shields.io/github/actions/workflow/status/iceriny/create-course-feedback/dev.yml?label=开发版&color=green)
+
 ![许可证](https://img.shields.io/badge/许可证-MIT-green.svg)
 
 这是一个面向教育工作者的纯前端应用，旨在帮助教师快速高效地生成个性化课程反馈。通过直观的界面和 AI 辅助功能，教师可以为每位学生创建专业、个性化的课程反馈内容，并以 Markdown 格式导出。

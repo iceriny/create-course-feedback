@@ -166,7 +166,7 @@ const getStudentContentV2Text = (
   interaction: string,
   other: string,
 ) => {
-  return `整体表现${total},掌握情况${mastery_situation},专注度${attention},参与度${interaction},其他${other}`;
+  return `整体表现:${total},掌握情况:${mastery_situation},专注度:${attention},参与度:${interaction},其他:${other}`;
 };
 
 /**

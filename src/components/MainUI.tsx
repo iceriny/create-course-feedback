@@ -160,13 +160,14 @@ const preloadComponents = () => {
 };
 
 const getStudentContentV2Text = (
+  gender: string,
   total: string,
   mastery_situation: string,
   attention: string,
   interaction: string,
   other: string,
 ) => {
-  return `整体表现:${total},掌握情况:${mastery_situation},专注度:${attention},参与度:${interaction},其他:${other}`;
+  return `性别:${gender},整体表现:${total},掌握情况:${mastery_situation},专注度:${attention},参与度:${interaction},其他:${other}`;
 };
 
 /**
@@ -561,7 +562,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
                   console.log(`学生${index}各字段值:`, {total, mastery, attention, interaction, other});
 
-                  return getStudentContentV2Text(total, mastery, attention, interaction, other);
+                  return getStudentContentV2Text(studentsList[index].gender, total, mastery, attention, interaction, other);
                 })(),
           role: "user",
         },

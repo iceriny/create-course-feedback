@@ -597,7 +597,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           "course-name": data.courseName,
           "course-contents": data.courseContents,
           "course-objectives": data.courseObjectives,
-          "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
+        //   "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
         });
       }
     },

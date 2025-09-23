@@ -39,7 +39,6 @@ import type { JointContent } from "antd/es/message/interface";
 
 // 工具库
 import dayjs from "dayjs";
-import { v4 as uuid_v4 } from "uuid";
 import { API, type ModelType } from "../AI_API";
 
 // 导入子组件
@@ -53,6 +52,7 @@ const CourseInfoCard = lazy(() => import("./CourseInfoCard"));
 import {
   ClassTime,
   HistorysType,
+  HistoryType,
   PromptItem,
   PromptType,
 } from "./types";
@@ -246,8 +246,38 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 使用优化的批量读取函数
     const localStorageData = batchGetLocalStorage(localStorageKeys);
 
-    // 批量设置状态（React 18 自动批处理）
-    const historyData = safeJsonParse(localStorageData["class-history"], {});
+    // 批量设置状态
+    let historyData = safeJsonParse(localStorageData["class-history"], {});
+
+    // Migration logic for history data
+    const needsMigration = Object.keys(historyData).some(
+      (key) => !dayjs(key).isValid(),
+    );
+
+    if (needsMigration) {
+      const migratedHistory: HistorysType = {};
+      let migrationDate = dayjs("2000-01-01T00:00:00.000Z"); // Use a fixed base date
+
+      Object.entries(historyData).forEach(([key, value]) => {
+        if (dayjs(key).isValid()) {
+          // Already new format
+          migratedHistory[key] = value as HistoryType;
+        } else {
+          // Old format (UUID key), needs migration
+          const newKey = migrationDate.toISOString();
+          migratedHistory[newKey] = {
+            ...(value as Omit<HistoryType, "time">), // Cast to old structure type
+            time: [newKey, newKey],
+          };
+          migrationDate = migrationDate.add(1, "day");
+        }
+      });
+
+      historyData = migratedHistory;
+      localStorage.setItem("class-history", JSON.stringify(historyData));
+      sendMessage("课程历史记录已成功迁移到新版本。");
+    }
+
     if (Object.keys(historyData).length > 0) {
       setHistory(historyData);
     }
@@ -279,7 +309,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [sendMessage]);
 
   // 拷贝到剪切板
   const copyToClipboard = useCallback(
@@ -352,31 +382,13 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const new_history = {
       ...history,
     };
-    const Already_Existing_Names = new Set();
-    for (const key in new_history) {
-      const { courseName: _courseName } = new_history[key];
-      Already_Existing_Names.add(_courseName);
-    }
-
-    if (Already_Existing_Names.has(courseName)) {
-      for (const key in new_history) {
-        const { courseName: _courseName } = new_history[key];
-        if (_courseName === courseName) {
-          new_history[key] = {
-            courseName,
-            courseContents: data.get("course-contents"),
-            courseObjectives: data.get("course-objectives"),
-          };
-        }
-      }
-    } else {
-      const newKey = uuid_v4();
-      new_history[newKey] = {
-        courseName,
-        courseContents: data.get("course-contents"),
-        courseObjectives: data.get("course-objectives"),
-      };
-    }
+    const newKey = time[0].toISOString();
+    new_history[newKey] = {
+      courseName,
+      courseContents: data.get("course-contents"),
+      courseObjectives: data.get("course-objectives"),
+      time: [time[0].toISOString(), time[1].toISOString()],
+    };
 
     // 限制历史记录的长度
     const keys$ = Object.keys(new_history);
@@ -585,6 +597,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           "course-name": data.courseName,
           "course-contents": data.courseContents,
           "course-objectives": data.courseObjectives,
+          "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
         });
       }
     },

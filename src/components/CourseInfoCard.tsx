@@ -1,5 +1,6 @@
 import { FC, useCallback } from "react";
 import {
+  AutoComplete,
   Button,
   Card,
   DatePicker,
@@ -7,7 +8,6 @@ import {
   Form,
   Input,
   Select,
-  Space,
   Tooltip,
   theme,
 } from "antd";
@@ -154,46 +154,54 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
         name="course-name"
         rules={[{ required: true }]}
       >
-        <Input
-          addonAfter={
-            <Select
-              defaultValue={null}
-              notFoundContent="无历史记录"
-              placeholder="历史记录"
-              style={{ width: 200 }}
-              onSelect={(value: string | null) => {
-                if (value !== null) {
-                  onHistoryLoad(value);
-                }
-              }}
-              optionRender={(options) => {
-                const value = options?.value;
-                if (!value) return null;
-                return (
-                  <Flex gap={10} align="center">
-                    {options.data.label.length > 10
-                      ? options.data.label.slice(0, 10) + "..."
-                      : options.data.label}
-                    <Button
-                      icon={
-                        <CloseOutlined
-                          style={{
-                            color: token.colorError,
-                          }}
-                        />
-                      }
-                      type="link"
-                      onClick={(event) => handleHistoryDelete(String(value), event)}
-                    />
+        <AutoComplete
+          options={Object.keys(history)
+            .sort((a, b) => b.localeCompare(a))
+            .map((key) => {
+              const item = history[key];
+              return {
+                key,
+                value: item.courseName,
+                label: (
+                  <Flex justify="space-between" align="center">
+                    <span
+                      style={{
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "200px",
+                      }}
+                    >
+                      {item.courseName}
+                    </span>
+                    <Flex gap={10} align="center">
+                      <span style={{ color: "gray", fontSize: "12px" }}>
+                        {dayjs(item.time[0]).format("YYYY-MM-DD")}
+                      </span>
+                      <Button
+                        icon={
+                          <CloseOutlined
+                            style={{
+                              color: token.colorError,
+                            }}
+                          />
+                        }
+                        type="link"
+                        onClick={(event) => handleHistoryDelete(key, event)}
+                      />
+                    </Flex>
                   </Flex>
-                );
-              }}
-              options={Object.keys(history).map((key) => ({
-                value: key,
-                label: history[key].courseName,
-              }))}
-            />
+                ),
+              };
+            })}
+          style={{ width: "100%" }}
+          onSelect={(_value, option) => {
+            onHistoryLoad(option.key);
+          }}
+          filterOption={(inputValue, option) =>
+            option?.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
           }
+          placeholder="历史记录"
         />
       </Form.Item>
 
@@ -208,6 +216,10 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
           renderExtraFooter={() => {
             const pickerDate: dayjs.Dayjs[] = form.getFieldValue("course-time");
             const set = (date: dayjs.Dayjs[]) => {
+              // 处理循环引用
+              if (pickerDate && date[0].isSame(pickerDate[0]) && date[1].isSame(pickerDate[1])) {
+                return;
+              }
               form.setFieldValue("course-time", date);
             };
             return (
@@ -228,10 +240,17 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     size="small"
                     type="link"
                     onClick={() => {
-                      set([
-                        pickerDate[0].subtract(1, "day"),
-                        pickerDate[1].subtract(1, "day"),
-                      ]);
+                      if (pickerDate) {
+                        set([
+                          pickerDate[0].subtract(1, "day"),
+                          pickerDate[1].subtract(1, "day"),
+                        ]);
+                      } else {
+                        const today = dayjs();
+                        const start = today.startOf("day").set("hour", 8).subtract(1, "day");
+                        const end = today.startOf("day").set("hour", 9).set("minute", 50).subtract(1, "day");
+                        set([start, end]);
+                      }
                     }}
                   >
                     昨天
@@ -246,10 +265,17 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     size="small"
                     type="link"
                     onClick={() => {
-                      set([
-                        pickerDate[0].subtract(1, "week"),
-                        pickerDate[1].subtract(1, "week"),
-                      ]);
+                      if (pickerDate) {
+                        set([
+                          pickerDate[0].subtract(1, "week"),
+                          pickerDate[1].subtract(1, "week"),
+                        ]);
+                      } else {
+                        const today = dayjs();
+                        const start = today.startOf("day").set("hour", 8).subtract(1, "week");
+                        const end = today.startOf("day").set("hour", 9).set("minute", 50).subtract(1, "week");
+                        set([start, end]);
+                      }
                     }}
                   >
                     上周
@@ -264,17 +290,20 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     size="small"
                     type="primary"
                     onClick={() => {
-                      let start = dayjs().startOf("day");
-                      let end = dayjs().startOf("day");
+                      let start = dayjs().startOf("day").set("hour", 8);
+                      let end = dayjs().startOf("day").set("hour", 9).set("minute", 50);
                       console.log("pickerDate", pickerDate);
-                      start = start
-                        .set("hour", pickerDate[0].hour())
-                        .set("minute", pickerDate[0].minute())
-                        .set("second", pickerDate[0].second());
-                      end = end
-                        .set("hour", pickerDate[1].hour())
-                        .set("minute", pickerDate[1].minute())
-                        .set("second", pickerDate[1].second());
+                      if (pickerDate)
+                      {
+                        start = start
+                          .set("hour", pickerDate[0].hour())
+                          .set("minute", pickerDate[0].minute())
+                          .set("second", pickerDate[0].second());
+                        end = end
+                          .set("hour", pickerDate[1].hour())
+                          .set("minute", pickerDate[1].minute())
+                          .set("second", pickerDate[1].second());
+                      }
                       set([start, end]);
                     }}
                   >
@@ -315,7 +344,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
             >
               {/* 遍历课程内容字段 */}
               {fields.map((subField) => (
-                <Space key={subField.key}>
+                <Flex key={subField.key} gap={16} align="center" justify="space-between" style={{ width: "100%" }}>
                   <Form.Item
                     noStyle
                     name={[subField.name, "item"]}
@@ -323,7 +352,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                   >
                     <Input
                       style={{
-                        width: 350,
+                        width: "100%",
                       }}
                       onPressEnter={() => {
                         opt.add();
@@ -337,7 +366,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                       opt.remove(subField.name);
                     }}
                   />
-                </Space>
+                </Flex>
               ))}
               {/* 添加课程内容按钮 */}
               <Button type="dashed" onClick={() => opt.add()} block>
@@ -374,7 +403,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
               }}
             >
               {fields.map((subField) => (
-                <Space key={subField.key}>
+                <Flex key={subField.key} gap={16} align="center" justify="space-between" style={{ width: "100%" }}>
                   <Form.Item
                     noStyle
                     name={[subField.name, "item"]}
@@ -382,7 +411,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                   >
                     <Input
                       style={{
-                        width: 350,
+                        width: "100%",
                       }}
                       placeholder="填写课程内容"
                     />
@@ -393,7 +422,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                       opt.remove(subField.name);
                     }}
                   />
-                </Space>
+                </Flex>
               ))}
               {/* 添加课程内容按钮 */}
               <Button type="dashed" onClick={() => opt.add()} block>

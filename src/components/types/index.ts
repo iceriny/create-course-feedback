@@ -27,8 +27,9 @@ export interface ClassTime {
 // 历史记录类型
 export interface HistoryType {
   courseName: string;
-  courseContents: string[];
-  courseObjectives: string[];
+  courseContents: { item: string }[];
+  courseObjectives: { item: string }[];
+  time: [string, string];
 }
 
 export interface HistorysType {

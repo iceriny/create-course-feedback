@@ -1,5 +1,12 @@
 import { useCallback, useState } from "react";
 import { StudentBasicInfo, StudentsInfo } from "../components/types";
+import {
+  createStudentsInfo,
+  mergeStudentNamesWithExistingInfo,
+  normalizeStoredStudents,
+  parseStudentNamesInput,
+  sortStudentsAndInfoByName,
+} from "../domain/student";
 
 /**
  * 学生管理Hook
@@ -15,34 +22,10 @@ export const useStudentsManager = () => {
   }>({});
 
   /**
-   * 从原始字符串数组创建学生列表（保持向后兼容）
-   */
-  const createStudentsFromNames = useCallback(
-    (names: string[]): StudentBasicInfo[] => {
-      return names.map((name) => ({
-        name: name.trim(),
-        gender: "male" as const, // 默认性别
-        version: "v2" as const, // 默认版本
-      }));
-    },
-    [],
-  );
-
-  /**
    * 初始化学生动态信息
    */
   const initializeStudentsInfo = useCallback((students: StudentBasicInfo[]) => {
-    const newStudentsInfo: { [key: number]: StudentsInfo } = {};
-    students.forEach((student, index) => {
-      newStudentsInfo[index] = {
-        name: student.name,
-        content: "",
-        think_content: "",
-        loading: false,
-        activated: true,
-      };
-    });
-    setStudentsInfo(newStudentsInfo);
+    setStudentsInfo(createStudentsInfo(students));
   }, []);
 
   /**
@@ -70,28 +53,16 @@ export const useStudentsManager = () => {
       if (studentsStr) {
         try {
           const data = JSON.parse(studentsStr);
+          const students = normalizeStoredStudents(data);
 
-          if (!Array.isArray(data) || data.length === 0) {
+          if (students.length === 0) {
             setStudentsList([]);
             setStudentsInfo({});
             return;
           }
 
-          // 兼容旧格式 (字符串数组)
-          if (typeof data[0] === "string") {
-            // 旧格式：字符串数组
-            const students = createStudentsFromNames(data);
-            setStudentsList(students);
-            initializeStudentsInfo(students);
-          } else {
-            // 新格式：对象数组，但需要兼容没有version字段的情况
-            const students = (data as StudentBasicInfo[]).map((student) => ({
-              ...student,
-              version: student.version || "v2", // 为旧数据添加默认版本
-            }));
-            setStudentsList(students);
-            initializeStudentsInfo(students);
-          }
+          setStudentsList(students);
+          initializeStudentsInfo(students);
         } catch (error) {
           console.error("Failed to parse students data:", error);
           setStudentsList([]);
@@ -99,7 +70,7 @@ export const useStudentsManager = () => {
         }
       }
     },
-    [createStudentsFromNames, initializeStudentsInfo],
+    [initializeStudentsInfo],
   );
 
   /**
@@ -111,36 +82,11 @@ export const useStudentsManager = () => {
         throw new Error("班级名不能为空！");
       }
 
-      const values: string[] = [];
-      for (const v of rawValues) {
-        if (v.includes(",")) {
-          const splitV = v.split(",");
-          splitV.forEach((_item) => {
-            const item = _item.trim();
-            if (item !== "" && !values.includes(item)) {
-              values.push(item);
-            }
-          });
-        } else {
-          values.push(v.trim());
-        }
-      }
-
-      // 保持现有学生的性别和版本信息，新增学生默认为男性和v2版本
-      const existingStudentsMap = new Map(
-        studentsList.map((s) => [
-          s.name,
-          { gender: s.gender, version: s.version },
-        ]),
+      const names = parseStudentNamesInput(rawValues);
+      const newStudents = mergeStudentNamesWithExistingInfo(
+        names,
+        studentsList,
       );
-      const newStudents: StudentBasicInfo[] = values.map((name) => {
-        const existing = existingStudentsMap.get(name);
-        return {
-          name,
-          gender: existing?.gender || "male",
-          version: existing?.version || "v2",
-        };
-      });
 
       setStudentsList(newStudents);
       initializeStudentsInfo(newStudents);
@@ -252,20 +198,10 @@ export const useStudentsManager = () => {
    */
   const sortStudentsByName = useCallback(
     (className: string) => {
-      const sortedStudents = [...studentsList].sort((a, b) =>
-        a.name.localeCompare(b.name),
+      const { sortedStudents, sortedInfo } = sortStudentsAndInfoByName(
+        studentsList,
+        studentsInfo,
       );
-
-      // 重新排序动态信息
-      const sortedInfo = Object.fromEntries(
-        Object.entries(studentsInfo)
-          .map(([key, value]) => ({
-            key: Number(key),
-            value,
-          }))
-          .sort((a, b) => a.value.name.localeCompare(b.value.name))
-          .map((item, index) => [index, item.value]),
-      ) as Record<number, StudentsInfo>;
 
       setStudentsList(sortedStudents);
       setStudentsInfo(sortedInfo);

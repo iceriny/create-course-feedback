@@ -1136,18 +1136,27 @@ Prompt recipe 可以像代码一样有版本：
 
 目标：让 store 成为业务状态源。
 
-任务：
+已验收完成项：
 
-- 建立 `courseStore`、`rosterStore`、`feedbackStore`、`aiStore`、`settingsStore`。
-- 把 `useStudentsManager` 迁移到 `rosterStore`。
-- 把模板、提示词、模型配置迁移到独立 store。
-- 表单从“事实源”变成“编辑草稿”。
-- 将持久化统一接入 repository。
+- 建立并接入 `courseStore`、`rosterStore`、`feedbackStore`、`aiStore`、`settingsStore`。
+- 把 `useStudentsManager` 迁移为 `rosterStore` 的薄适配层，学生名单、激活状态、性别、版本和运行时反馈状态由 store 管理。
+- 把模板、签名、提示词选择、提示词列表和模型配置迁移到独立 store。
+- 课程历史、班级列表、班级时间、学生名单、模板和设置的本地读写开始统一接入 repository。
+- `MainUI` 不再直接编排学生名单持久化、课程历史写入、模板保存、模型保存和节流状态。
+- 保留 Ant Design 表单作为编辑草稿来源，生成和导出时再编译为明确的课程上下文。
+- 新增 store/repository 自动化测试，覆盖名单迁移、状态更新、课程保存、模板保存、设置保存和本地存储读写。
 
-收益：
+验收结果：
 
 - `MainUI` 变薄。
 - 功能扩展不再牵一发动全身。
+- `yarn test`、`yarn tsc -b`、`yarn lint`、`yarn build` 均通过。
+- 在 `http://localhost:5173/` 使用样例班级 `cpp0608` 完成单生生成验收：状态从“生成中”进入“已生成”，质量提示显示“检查通过”，未新增控制台警告。
+
+剩余边界：
+
+- 课程表单仍是当前编辑草稿来源，后续如果要完全消除表单事实源，需要在后续阶段引入更完整的 course draft store。
+- `AIClient` provider adapter、任务队列、失败重试和上下文规划仍属于第三阶段。
 
 ### 8.3 第三阶段：AI 管线重构
 

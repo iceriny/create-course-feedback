@@ -1,16 +1,16 @@
 import { PROMPTS } from "../components/constants";
 import { PromptItem } from "../components/types";
+import {
+  readStorageJson,
+  writeStorageJson,
+} from "../services/persistence/localStorageRepository";
 
 /**
  * 从本地存储中获取提示词
  * @returns 提示词对象
  */
 export function getPromptFromLocalStorage(): Record<string, PromptItem> {
-  const prompts = localStorage.getItem("prompts");
-  if (prompts) {
-    return JSON.parse(prompts);
-  }
-  return {};
+  return readStorageJson<Record<string, PromptItem>>("prompts", {});
 }
 
 /**
@@ -25,7 +25,7 @@ export function savePromptToLocalStorage(prompts: Record<string, PromptItem>) {
     }
     _t[key] = item;
   }
-  localStorage.setItem("prompts", JSON.stringify(prompts));
+  writeStorageJson("prompts", _t);
 }
 
 /**
@@ -36,7 +36,7 @@ export function savePromptToLocalStorage(prompts: Record<string, PromptItem>) {
  */
 export function addToLocalStorageArray(key: string, ...values: string[]) {
   // 从本地存储中获取数组
-  const array: string[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+  const array = readStorageJson<string[]>(key, []);
   // 如果数组中已经存在该值，则不添加
   for (const value of values) {
     if (array.includes(value)) continue;
@@ -44,7 +44,7 @@ export function addToLocalStorageArray(key: string, ...values: string[]) {
     array.push(value);
   }
   // 将数组保存到本地存储
-  localStorage.setItem(key, JSON.stringify(array));
+  writeStorageJson(key, array);
   return array;
 }
 
@@ -54,8 +54,7 @@ export function addToLocalStorageArray(key: string, ...values: string[]) {
  * @returns 数组数据
  */
 export function getLocalStorage<T>(key: string) {
-  const array = JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
-  return array;
+  return readStorageJson<T[]>(key, []);
 }
 
 /**

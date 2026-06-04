@@ -12,14 +12,14 @@ import {
   Divider,
 } from "antd";
 import type { JointContent } from "antd/es/message/interface";
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { v4 as uuid_v4 } from "uuid";
 import type { ModelType, ProviderType } from "../AI_API";
 import { API } from "../AI_API";
 import { PROMPTS } from "./constants";
 import dayjs from "dayjs";
 import { PromptItem, PromptType } from "./types";
-import { savePromptToLocalStorage, downloadJson } from "../utils";
+import { downloadJson } from "../utils";
 
 const { useToken } = theme;
 const ExportALLLocalStorage = () => {
@@ -75,6 +75,7 @@ interface SettingsDrawerProps {
   setPromptItems: (items: Record<string, PromptItem>) => void;
   promptKey: PromptType;
   setPromptKey: (key: PromptType) => void;
+  savePromptItems: () => void;
   sendMessage: (
     content: JointContent,
     duration?: number | VoidFunction,
@@ -95,6 +96,7 @@ const SettingsDrawer = memo(
     setPromptItems,
     promptKey,
     setPromptKey,
+    savePromptItems,
     sendMessage,
   }: SettingsDrawerProps) => {
     const { token } = useToken();
@@ -139,13 +141,6 @@ const SettingsDrawer = memo(
       borderLeft: 0,
       borderRadius: `0 ${token.borderRadius}px ${token.borderRadius}px 0`,
     };
-    useEffect(() => {
-      const promptKey = localStorage.getItem("promptKey") as PromptType | null;
-      if (promptKey) {
-        setPromptKey(promptKey);
-      }
-    }, [setPromptKey]);
-
     // 处理供应商变更
     const handleProviderChange = (value: ProviderType) => {
       setProvider(value);
@@ -367,7 +362,7 @@ const SettingsDrawer = memo(
                 const api_key = event.target.value.trim();
                 API.setToken(api_key);
                 localStorage.setItem("api_key", api_key);
-                sendMessage("API Key设置成功, 请刷新页面加载可用模型.");
+                sendMessage("API Key 已保存，请刷新页面加载可用模型。");
               }}
             />
           </Space.Compact>
@@ -378,11 +373,7 @@ const SettingsDrawer = memo(
               <Tooltip title="选择模板">
                 <Select
                   style={{ width: "30%" }}
-                  defaultValue={
-                    localStorage.getItem("promptKey") ||
-                    ("programming" as PromptType) ||
-                    "custom"
-                  }
+                  value={promptKey}
                   options={[
                     ...Object.entries(promptItems).map((prompt) => ({
                       value: prompt[0],
@@ -406,7 +397,6 @@ const SettingsDrawer = memo(
                       setPromptKey(uid as PromptType);
                     } else {
                       setPromptKey(value as PromptType);
-                      localStorage.setItem("promptKey", value);
                     }
                   }}
                 />
@@ -439,11 +429,11 @@ const SettingsDrawer = memo(
                         promptKey in PROMPTS ? undefined : token.colorError,
                     }}
                     onClick={() => {
+                      if (promptKey in PROMPTS) return;
                       const _t = { ...promptItems };
                       delete _t[promptKey];
-                      setPromptKey(Object.keys(promptItems)[0] as PromptType);
                       setPromptItems(_t);
-                      savePromptToLocalStorage(_t);
+                      savePromptItems();
                     }}
                   />
                   <SaveOutlined
@@ -453,7 +443,7 @@ const SettingsDrawer = memo(
                         promptKey in PROMPTS ? undefined : token.colorPrimary,
                     }}
                     onClick={() => {
-                      savePromptToLocalStorage(promptItems);
+                      savePromptItems();
                     }}
                   />
               </span>

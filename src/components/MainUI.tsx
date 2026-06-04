@@ -39,28 +39,15 @@ import type { JointContent } from "antd/es/message/interface";
 
 // 工具库
 import dayjs from "dayjs";
-import { API, type ModelType } from "../AI_API";
+import { API } from "../AI_API";
 import type { CourseTemplateContext } from "../domain/course";
 import { buildCourseTemplateContext } from "../domain/course";
-import { formatStructuredStudentPerformance } from "../domain/student";
 import {
   buildFeedbackBatchMarkdown,
   buildStudentFeedbackMarkdown,
-  cleanGeneratedFeedback,
-  DEFAULT_FEEDBACK_TEMPLATE,
 } from "../services/feedback/feedbackTemplate";
-import {
-  addCourseContextToHistory,
-  buildClassTimeFromCourseContext,
-  migrateCourseHistory,
-  parseStoredClassTime,
-  removeCourseHistoryItem,
-  shiftClassTimeToPreviousWeek,
-} from "../services/course/courseHistory";
-import {
-  buildStudentGenerationMessages,
-  compileCoursePromptContext,
-} from "../services/prompt/promptCompiler";
+import { shiftClassTimeToPreviousWeek } from "../services/course/courseHistory";
+import { compileCoursePromptContext } from "../services/prompt/promptCompiler";
 
 // 导入子组件
 const StringListInput = lazy(() => import("./StringListInput"));
@@ -69,22 +56,17 @@ const StudentsList = lazy(() => import("./StudentsList"));
 const TemplateEditor = lazy(() => import("./TemplateEditor"));
 const CourseInfoCard = lazy(() => import("./CourseInfoCard"));
 
-// 导入类型
-import { HistorysType, PromptItem, PromptType } from "./types";
-
 // 导入自定义Hook
-import { useStudentsManager } from "../hooks";
-import { useInputAssistantStore } from "../store/InputAssistantStore";
+import { useFeedbackGeneration, useStudentsManager } from "../hooks";
+import {
+  useAIStore,
+  useCourseStore,
+  useFeedbackStore,
+  useInputAssistantStore,
+  useSettingsStore,
+} from "../store";
 
 // 导入常量和工具函数
-import { PROMPTS } from "./constants";
-import {
-  addToLocalStorageArray,
-  getLocalStorage,
-  getPromptFromLocalStorage,
-  batchGetLocalStorage,
-  safeJsonParse,
-} from "../utils";
 
 // 定义组件Props接口
 interface MainUIProps {
@@ -174,89 +156,56 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   const loadV2CustomOptions = useInputAssistantStore(
     (state) => state.loadV2CustomOptions,
   );
-  // 提示词Key
-  const [promptKey, setPromptKey] = useState<PromptType>("programming");
-  // 提示词内容
-  const [promptItems, setPromptItems] = useState<Record<string, PromptItem>>({
-    ...PROMPTS,
-    ...getPromptFromLocalStorage(),
-  });
-  // 用于存储班级列表
-  const [classList, setClasses] = useState<string[]>(
-    getLocalStorage("class-name"),
+  const classList = useCourseStore((state) => state.classList);
+  const history = useCourseStore((state) => state.history);
+  const hydrateCourseState = useCourseStore(
+    (state) => state.hydrateCourseState,
   );
+  const readStoredClassTime = useCourseStore(
+    (state) => state.readStoredClassTime,
+  );
+  const removeHistoryItem = useCourseStore((state) => state.removeHistoryItem);
+  const saveCourseContext = useCourseStore((state) => state.saveCourseContext);
+  const customTemplate = useFeedbackStore((state) => state.customTemplate);
+  const hydrateFeedbackSettings = useFeedbackStore(
+    (state) => state.hydrateFeedbackSettings,
+  );
+  const setFeedbackTemplate = useFeedbackStore(
+    (state) => state.setFeedbackTemplate,
+  );
+  const signature = useFeedbackStore((state) => state.signature);
+  const isThrottled = useAIStore((state) => state.isThrottled);
+  const setThrottleState = useAIStore((state) => state.setThrottleState);
+  const throttleMessage = useAIStore((state) => state.throttleMessage);
+  const hydrateSettings = useSettingsStore((state) => state.hydrateSettings);
+  const model = useSettingsStore((state) => state.model);
+  const promptItems = useSettingsStore((state) => state.promptItems);
+  const promptKey = useSettingsStore((state) => state.promptKey);
+  const setModel = useSettingsStore((state) => state.setModel);
+  const setPromptItems = useSettingsStore((state) => state.setPromptItems);
+  const setPromptKey = useSettingsStore((state) => state.setPromptKey);
+  const savePromptItems = useSettingsStore((state) => state.savePromptItems);
   // 标记表单是否已提交
   const isFinishedRef = useRef(false);
   // 设置抽屉是否打开的状态
   const [open, setOpen] = useState(false);
-  const [model, setModel] = useState<ModelType>(API.getModel);
-  // 历史课程信息
-  const [history, setHistory] = useState<HistorysType>({});
   // 获取主题token
   const { token } = useToken();
-  // 节流状态
-  const [isThrottled, setIsThrottled] = useState(false);
-  // 节流消息
-  const [throttleMessage, setThrottleMessage] = useState("");
   // 模板相关状态
   const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false);
-  const [customTemplate, setCustomTemplate] = useState(
-    DEFAULT_FEEDBACK_TEMPLATE,
-  );
-  const [signature, setSignature] = useState("哆啦人工智能小栈");
-
-  const handleSetModel = useCallback(
-    (model: ModelType) => {
-      setModel(model);
-      localStorage.setItem("ai-model", JSON.stringify(model));
-      API.setModel(model);
-    },
-    [setModel],
-  );
 
   // 优化初始化加载 - 使用批量操作和错误处理
   useEffect(() => {
-    const localStorageKeys = [
-      "class-history",
-      "feedback-template",
-      "signature",
-      "ai-model",
-    ];
-
-    // 使用优化的批量读取函数
-    const localStorageData = batchGetLocalStorage(localStorageKeys);
-
-    const rawHistoryData = safeJsonParse(localStorageData["class-history"], {});
-    const { history: historyData, migrated } =
-      migrateCourseHistory(rawHistoryData);
-
+    const { migrated } = hydrateCourseState();
     if (migrated) {
-      localStorage.setItem("class-history", JSON.stringify(historyData));
       sendMessage("课程历史记录已成功迁移到新版本。");
     }
-
-    if (Object.keys(historyData).length > 0) {
-      setHistory(historyData);
-    }
-
-    if (localStorageData["feedback-template"]) {
-      setCustomTemplate(localStorageData["feedback-template"]);
-    }
-
-    if (localStorageData["signature"]) {
-      setSignature(localStorageData["signature"]);
-    }
-
-    const modelData = safeJsonParse(localStorageData["ai-model"], null);
-    if (modelData) {
-      setModel(modelData);
-      API.setModel(modelData);
-    }
+    hydrateFeedbackSettings();
+    hydrateSettings();
 
     // API 监听器设置
     const unsubscribe = API.addThrottleListener((isThrottled, message) => {
-      setIsThrottled(isThrottled);
-      setThrottleMessage(message);
+      setThrottleState(isThrottled, message);
     });
 
     // 延迟预加载组件
@@ -273,7 +222,15 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     return () => {
       unsubscribe();
     };
-  }, [sendMessage, loadV1Suggestions, loadV2CustomOptions]);
+  }, [
+    hydrateCourseState,
+    hydrateFeedbackSettings,
+    hydrateSettings,
+    loadV1Suggestions,
+    loadV2CustomOptions,
+    sendMessage,
+    setThrottleState,
+  ]);
 
   // 拷贝到剪切板
   const copyToClipboard = useCallback(
@@ -306,24 +263,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       return;
     }
 
-    // 保存班级数据到本地存储
-    const saveData = buildClassTimeFromCourseContext(courseContext);
-
-    localStorage.setItem(courseContext.className, JSON.stringify(saveData));
-    const classList = addToLocalStorageArray(
-      "class-name",
-      courseContext.className,
-    );
-    setClasses(classList);
-
-    // 添加到历史记录
-    const newHistory = addCourseContextToHistory(history, courseContext);
-    setHistory(newHistory);
-    localStorage.setItem("class-history", JSON.stringify(newHistory));
+    saveCourseContext(courseContext);
 
     // 标记表单已完成
     isFinishedRef.current = true;
-  }, [getCourseTemplateContext, history]);
+  }, [getCourseTemplateContext, saveCourseContext]);
 
   // 导入班级数据
   const importClass = useCallback(
@@ -331,8 +275,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       const className = key.trim();
       if (!className) return;
 
-      const data = localStorage.getItem(className);
-      const classTime = parseStoredClassTime(data);
+      const classTime = readStoredClassTime(className);
       if (classTime) {
         const [newFirstTime, newLastTime] =
           shiftClassTimeToPreviousWeek(classTime);
@@ -357,7 +300,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       // 从本地存储获取学生列表
       loadStudentsFromStorage(className);
     },
-    [class_form, sendMessage, loadStudentsFromStorage],
+    [class_form, loadStudentsFromStorage, readStoredClassTime, sendMessage],
   );
 
   // 处理导入班级数据的回调函数
@@ -382,131 +325,25 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   // 处理历史记录删除
   const handleHistoryDelete = useCallback(
     (key: string) => {
-      const newHistory = removeCourseHistoryItem(history, key);
-      setHistory(newHistory);
-      localStorage.setItem("class-history", JSON.stringify(newHistory));
+      removeHistoryItem(key);
     },
-    [history],
+    [removeHistoryItem],
   );
 
-  // 处理单次AI调用
-  const handleSingleAIOptimize = useCallback(
-    (index: number) => {
-      const classContent = getAIClassContent();
-      if (!classContent) {
-        sendWarning("请先补完整课程信息。");
-        return;
-      }
-
-      if (!isFinishedRef.current) {
-        handleSubmit();
-      }
-
-      // 设置学生为加载状态
-      updateStudentInfo(index, { loading: true });
-
-      // 调用AI API发送消息
-      new API().sendMessage(
-        // 成功回调，更新文本区域内容
-        (content, type) => {
-          if (type === null || content === null) return;
-
-          // 更新特定学生的内容
-          switch (type) {
-            case "content":
-              updateStudentInfo(index, { content });
-              break;
-            case "reasoning_content":
-              updateStudentInfo(index, { think_content: content });
-              break;
-            default:
-              console.warn("未知的type");
-              break;
-          }
-        },
-        // `完成`回调
-        () => {
-          // 使用函数式更新来获取最新的状态
-          updateStudentInfo(index, (prevInfo) => {
-            return {
-              ...prevInfo,
-              content: cleanGeneratedFeedback(prevInfo.content || ""),
-              loading: false,
-            };
-          });
-        },
-        ...buildStudentGenerationMessages({
-          systemPrompt: promptItems[promptKey].prompt,
-          coursePromptContext: classContent,
-          student: studentsList[index],
-          performanceText:
-            studentsList[index]?.version === "v1"
-              ? (content_form.getFieldValue(["content", index]) ?? "")
-              : formatStructuredStudentPerformance(studentsList[index].gender, {
-                  total: content_form.getFieldValue([
-                    "content",
-                    index,
-                    "total",
-                  ]),
-                  mastery_situation: content_form.getFieldValue([
-                    "content",
-                    index,
-                    "mastery_situation",
-                  ]),
-                  attention: content_form.getFieldValue([
-                    "content",
-                    index,
-                    "attention",
-                  ]),
-                  interaction: content_form.getFieldValue([
-                    "content",
-                    index,
-                    "interaction",
-                  ]),
-                  other: content_form.getFieldValue([
-                    "content",
-                    index,
-                    "other",
-                  ]),
-                }),
-        }),
-      );
-    },
-    [
-      content_form,
-      getAIClassContent,
-      handleSubmit,
-      promptItems,
-      promptKey,
-      sendWarning,
-      studentsList,
-      updateStudentInfo,
-    ],
-  );
-
-  // 处理AI优化学生课堂表现的回调函数
-  const handleAIOptimize = useCallback(() => {
-    if (!getAIClassContent()) {
-      sendWarning("请先补完整课程信息。");
-      return;
-    }
-    if (API.tokenReady() === false) {
-      sendWarning("请先输入API Key.");
-      return;
-    }
-    // 遍历学生列表
-    for (const [index] of studentsList.entries()) {
-      if (studentsInfo[index]?.activated) {
-        handleSingleAIOptimize(index);
-      }
-    }
-  }, [
-    getAIClassContent,
-    handleSingleAIOptimize,
+  const {
+    generateActivatedFeedback: handleAIOptimize,
+    generateSingleFeedback: handleSingleAIOptimize,
+  } = useFeedbackGeneration({
+    contentForm: content_form,
+    ensureCourseSaved: handleSubmit,
+    getCoursePromptContext: getAIClassContent,
+    isCourseSavedRef: isFinishedRef,
+    prompt: promptItems[promptKey].prompt,
     sendWarning,
-    studentsList,
     studentsInfo,
-  ]);
+    studentsList,
+    updateStudentInfo,
+  });
 
   // 加载历史数据
   const handleLoadHistoryData = useCallback(
@@ -576,18 +413,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   // 处理模板保存
   const handleTemplateSave = useCallback(
     (newTemplate: string, newSignature: string) => {
-      // 保存模板到localStorage
-      localStorage.setItem("feedback-template", newTemplate);
-      localStorage.setItem("signature", newSignature);
-
-      // 更新状态
-      setCustomTemplate(newTemplate);
-      setSignature(newSignature);
+      setFeedbackTemplate(newTemplate, newSignature);
 
       // 关闭模态框
       setIsTemplateModalVisible(false);
     },
-    [],
+    [setFeedbackTemplate],
   );
 
   return (
@@ -598,11 +429,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           open={open}
           setOpen={setOpen}
           model={model}
-          setModel={handleSetModel}
+          setModel={setModel}
           promptItems={promptItems}
           setPromptItems={setPromptItems}
           promptKey={promptKey}
           setPromptKey={setPromptKey}
+          savePromptItems={savePromptItems}
           sendMessage={sendMessage}
         />
       </Suspense>

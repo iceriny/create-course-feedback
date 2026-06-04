@@ -1,6 +1,7 @@
 # 全面重构、AI 能力增强与交互体验优化头脑风暴
 
 生成时间：2026-06-03
+本次同步更新：2026-06-04
 
 ## 1. 背景与目标
 
@@ -13,6 +14,17 @@
 3. 功能与交互增强：提升教师批量处理学生反馈时的效率、可控性、可追溯性和信心。
 
 这不是一次“小修小补”的建议，而是一个可以分阶段推进的长期重构蓝图。
+
+截至 2026-06-04，项目已经先完成了一轮稳定化改动：
+
+- 依赖基线升级到 React 19.2、Ant Design 6、Vite 8 和 Yarn 4。
+- Yarn 继续使用项目本地 `node_modules`，npm lockfile 已移除。
+- Ant Design 6 迁移中的主要废弃用法已清理，包括 `onDropdownVisibleChange`、`Input addonBefore/addonAfter` 和旧的更新列表展示。
+- `CourseInfoCard` 的班级名自动完成已经支持焦点展开、输入过滤、选择/回车/失焦加载已有班级。
+- 课程时间、课程内容和教学目标编辑会触发自动保存，减少“填了但没提交”的交互漏洞。
+- AI 请求和导出改为发送前读取当前课程表单并编译上下文，避免把 `{{courseName}}` 等占位符原样送进 prompt。
+
+这些改动还没有完成整体架构重构，但已经验证了后文建议的一个关键方向：课程上下文和 prompt 编译需要成为明确、可测试、可追踪的业务步骤，而不是隐含在表单提交和组件状态缓存里。
 
 ## 2. 核心判断
 
@@ -563,6 +575,14 @@ Prompt 中明确分区：
 质量自检
 ```
 
+本次修复已经迈出第一步：`MainUI` 在发送 AI 请求前通过 `getCourseTemplateContext()` 读取课程表单，并用 `getAIClassContent()` 把 `AI_TEMPLATE` 编译成实际课程内容。这还不是完整的 `promptCompiler`，但它把“当前表单事实”和“模板字符串”分开，避免了旧实现中缓存模板过期、占位符泄漏到 prompt 的问题。
+
+下一步可以把这段逻辑从组件中抽出，形成真正的 compiler：
+
+- 输入：课程草稿、学生本次表现、当前提示词、模板版本。
+- 输出：完整 messages、上下文摘要、缺失字段列表、trace metadata。
+- 校验：不允许未替换占位符进入最终 messages。
+
 示例结构：
 
 ```ts
@@ -1086,6 +1106,15 @@ Prompt recipe 可以像代码一样有版本：
 
 目标：在不大改 UI 的前提下，先建立可测试的业务内核。
 
+已完成的基础项：
+
+- 依赖升级到 React 19.2、Ant Design 6、Vite 8、Yarn 4。
+- Yarn 配置为基于项目本地 `node_modules`。
+- 移除 Ant Design v5 React 19 patch。
+- 清理 Ant Design 6 相关主要废弃 API warning。
+- 修复课程上下文占位符进入 AI prompt 的问题。
+- 改善 `CourseInfoCard` 班级名自动完成与课程信息自动保存流程。
+
 任务：
 
 - 抽出领域类型。
@@ -1095,6 +1124,8 @@ Prompt recipe 可以像代码一样有版本：
 - 修复备份导出 raw string 问题。
 - 减少调试日志。
 - 修复 API message 累积风险。
+- 将 `getCourseTemplateContext()`、`getAIClassContent()` 迁移到可测试的 prompt/export compiler。
+- 为“未替换占位符不得进入 AI messages”补自动化测试。
 
 收益：
 
@@ -1215,16 +1246,16 @@ Prompt recipe 可以像代码一样有版本：
 
 如果只选最值得做的 10 件事，建议顺序如下：
 
-1. 引入 Vitest，给模板替换、学生名单解析、导出逻辑补测试。
-2. 抽出 `AIClient` 和 provider adapter，修复 message 累积问题。
-3. 抽出 `promptCompiler`，把 prompt 从字符串升级为 recipe。
-4. 建立 `PromptTrace`，保存每次生成的 recipe、模型、上下文策略和输出。
-5. 把学生从 index 关联迁移为稳定 ID。
-6. 建立 `feedbackStore` 和 `rosterStore`，逐步瘦身 `MainUI`。
-7. 新增反馈历史保存和学生历史摘要。
-8. 新增班级分析 summary，但只作为 tone/context calibration。
-9. 新增污染检测：其他学生姓名、虚构事实、历史覆盖本次输入。
-10. 做批量生成任务面板和单生审核状态。
+1. 引入 Vitest，给模板替换、课程上下文编译、学生名单解析、导出逻辑补测试。
+2. 抽出 `promptCompiler`，把当前 `getCourseTemplateContext()` / `getAIClassContent()` 从 `MainUI` 移到可测试模块。
+3. 在 compiler 层阻止未替换占位符进入 AI messages 和导出结果。
+4. 抽出 `AIClient` 和 provider adapter，修复 message 累积问题。
+5. 建立 `PromptTrace`，保存每次生成的 recipe、模型、上下文策略和输出。
+6. 把学生从 index 关联迁移为稳定 ID。
+7. 建立 `feedbackStore` 和 `rosterStore`，逐步瘦身 `MainUI`。
+8. 新增反馈历史保存和学生历史摘要。
+9. 新增班级分析 summary，但只作为 tone/context calibration。
+10. 新增污染检测和批量生成审核状态。
 
 ## 11. 最终愿景
 

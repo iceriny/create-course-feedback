@@ -173,6 +173,54 @@ const getStudentContentV2Text = (
   return `性别:${gender},整体表现:${total},掌握情况:${mastery_situation},专注度:${attention},参与度:${interaction},其他:${other}`;
 };
 
+type CourseListItem = { item: string };
+
+interface CourseTemplateContext {
+  className: string;
+  courseName: string;
+  courseContentItems: CourseListItem[];
+  courseObjectiveItems: CourseListItem[];
+  courseContents: string[];
+  courseObjectives: string[];
+  courseTime: [dayjs.Dayjs, dayjs.Dayjs];
+}
+
+const normalizeCourseItems = (items: unknown): CourseListItem[] => {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item) => {
+      if (typeof item === "string") {
+        return { item: item.trim() };
+      }
+
+      if (
+        item &&
+        typeof item === "object" &&
+        "item" in item &&
+        typeof item.item === "string"
+      ) {
+        return { item: item.item.trim() };
+      }
+
+      return undefined;
+    })
+    .filter(
+      (item): item is CourseListItem => Boolean(item?.item && item.item !== ""),
+    );
+};
+
+const hasCompleteCourseTime = (
+  time: unknown,
+): time is [dayjs.Dayjs, dayjs.Dayjs] => {
+  return (
+    Array.isArray(time) &&
+    time.length === 2 &&
+    dayjs.isDayjs(time[0]) &&
+    dayjs.isDayjs(time[1])
+  );
+};
+
 /**
  * 主页组件
  */
@@ -232,9 +280,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   // 模板相关状态
   const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false);
   const [customTemplate, setCustomTemplate] = useState(DEFAULT_TEMPLATE);
-  const [exportTemplate, setExportTemplate] = useState(DEFAULT_TEMPLATE);
-  // 使用ref而不是state存储AI模板，因为它对UI不可见
-  const aiTemplateRef = useRef(AI_TEMPLATE);
   const [signature, setSignature] = useState("哆啦人工智能小栈");
 
   const handleSetModel = useCallback(
@@ -296,7 +341,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
     if (localStorageData["feedback-template"]) {
       setCustomTemplate(localStorageData["feedback-template"]);
-      setExportTemplate(localStorageData["feedback-template"]);
     }
 
     if (localStorageData["signature"]) {
@@ -341,69 +385,79 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     [sendMessage],
   );
 
+  const getCourseTemplateContext =
+    useCallback((): CourseTemplateContext | null => {
+      const data = class_form.getFieldsValue();
+      const get = (key: string) => data[key];
+      const className = (get("class-name") as string | undefined)?.trim();
+      const courseName = (get("course-name") as string | undefined)?.trim();
+      const courseContentItems = normalizeCourseItems(get("course-contents"));
+      const courseObjectiveItems = normalizeCourseItems(
+        get("course-objectives"),
+      );
+      const courseTime = get("course-time");
+
+      if (
+        !className ||
+        !courseName ||
+        courseContentItems.length === 0 ||
+        courseObjectiveItems.length === 0 ||
+        !hasCompleteCourseTime(courseTime)
+      ) {
+        return null;
+      }
+
+      return {
+        className,
+        courseName,
+        courseContentItems,
+        courseObjectiveItems,
+        courseContents: courseContentItems.map((item) => `- ${item.item}\n`),
+        courseObjectives: courseObjectiveItems.map(
+          (item) => `- ${item.item}\n`,
+        ),
+        courseTime,
+      };
+    }, [class_form]);
+
+  const getAIClassContent = useCallback(() => {
+    const courseContext = getCourseTemplateContext();
+    if (!courseContext) return null;
+
+    return replaceTemplate(AI_TEMPLATE, {
+      courseName: courseContext.courseName,
+      courseTime: courseContext.courseTime,
+      courseContents: courseContext.courseContents,
+      courseObjectives: courseContext.courseObjectives,
+    });
+  }, [getCourseTemplateContext]);
+
   // 处理表单提交的回调函数
   const handleSubmit = useCallback(() => {
-    // 获取表单数据
-    const data = class_form.getFieldsValue();
-    // 添加get方法以便获取表单字段值
-    data.get = (key: string) => {
-      return data[key];
-    };
-    // 获取班级名称
-    const className: string = data.get("class-name");
-    // 获取课程名称
-    const courseName = data.get("course-name") as string | undefined;
-    if (!courseName) {
-      sendMessage("班级信息导入完成, 请继续填写或导入课程信息.");
+    const courseContext = getCourseTemplateContext();
+
+    if (!courseContext) {
+      isFinishedRef.current = false;
       return;
     }
-    // 获取课程内容并格式化为列表
-    const courseContents = data
-      .get("course-contents")
-      .map((item: { item: string }) => `- ${item.item}\n`) as string[];
-    // 获取教学目标并格式化为列表
-    const courseObjectives = data
-      .get("course-objectives")
-      .map((item: { item: string }) => `- ${item.item}\n`) as string[];
-    // 获取课程时间范围
-    const time = data.get("course-time") as [dayjs.Dayjs, dayjs.Dayjs];
 
-    // 使用封装的替换函数处理模板
-    const processedTemplate = replaceTemplate(customTemplate, {
+    const {
+      className,
       courseName,
-      courseTime: time,
-      courseContents,
-      courseObjectives,
-      signature,
-    });
-
-    setExportTemplate(processedTemplate);
-
-    // 为AI调用准备模板
-    const aiProcessedTemplate = replaceTemplate(AI_TEMPLATE, {
-      courseName,
-      courseTime: time,
-      courseContents,
-      courseObjectives,
-    });
-
-    // 使用ref存储AI模板
-    aiTemplateRef.current = aiProcessedTemplate;
+      courseContentItems,
+      courseObjectiveItems,
+      courseTime,
+    } = courseContext;
 
     // 保存班级数据到本地存储
-    if (time) {
-      const saveData: ClassTime = {
-        time: {
-          first: time[0].format("YYYY-MM-DD HH:mm"),
-          last: time[1].format("YYYY-MM-DD HH:mm"),
-        },
-      };
+    const saveData: ClassTime = {
+      time: {
+        first: courseTime[0].format("YYYY-MM-DD HH:mm"),
+        last: courseTime[1].format("YYYY-MM-DD HH:mm"),
+      },
+    };
 
-      localStorage.setItem(className, JSON.stringify(saveData));
-    } else {
-      sendMessage("请先选择授课时间.");
-      return;
-    }
+    localStorage.setItem(className, JSON.stringify(saveData));
     const classList = addToLocalStorageArray("class-name", className);
     setClasses(classList);
 
@@ -411,12 +465,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     const new_history = {
       ...history,
     };
-    const newKey = time[0].toISOString();
+    const newKey = courseTime[0].toISOString();
     new_history[newKey] = {
       courseName,
-      courseContents: data.get("course-contents"),
-      courseObjectives: data.get("course-objectives"),
-      time: time ? [time[0].toISOString(), time[1].toISOString()] : undefined,
+      courseContents: courseContentItems,
+      courseObjectives: courseObjectiveItems,
+      time: [courseTime[0].toISOString(), courseTime[1].toISOString()],
     };
 
     // 限制历史记录的长度
@@ -431,15 +485,15 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
     // 标记表单已完成
     isFinishedRef.current = true;
-
-    // 添加提交成功的反馈
-    sendMessage("课程信息提交成功！");
-  }, [class_form, history, sendMessage, customTemplate, signature]);
+  }, [getCourseTemplateContext, history]);
 
   // 导入班级数据
   const importClass = useCallback(
     (key: string, updateClassName = false) => {
-      const data = localStorage.getItem(key);
+      const className = key.trim();
+      if (!className) return;
+
+      const data = localStorage.getItem(className);
       if (data) {
         // 解析数据并设置表单字段值
         const dataObj: ClassTime = JSON.parse(data); // 获取原始时间的星期几和时分信息
@@ -467,16 +521,17 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
         // 如果需要更新班级名称（从选择器触发时）
         if (updateClassName) {
-          fieldsToUpdate["class-name"] = key;
+          fieldsToUpdate["class-name"] = className;
         }
 
         class_form.setFieldsValue(fieldsToUpdate);
+        sendMessage("班级信息已加载。");
       } else {
         // 未找到数据时发送提示消息
         sendMessage("未找到该班级的数据, 请检查班级名是否正确.");
       }
       // 从本地存储获取学生列表
-      loadStudentsFromStorage(key);
+      loadStudentsFromStorage(className);
     },
     [class_form, sendMessage, loadStudentsFromStorage],
   );
@@ -516,6 +571,16 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   // 处理单次AI调用
   const handleSingleAIOptimize = useCallback(
     (index: number) => {
+      const classContent = getAIClassContent();
+      if (!classContent) {
+        sendWarning("请先补完整课程信息。");
+        return;
+      }
+
+      if (!isFinishedRef.current) {
+        handleSubmit();
+      }
+
       // 设置学生为加载状态
       updateStudentInfo(index, { loading: true });
 
@@ -564,7 +629,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         // 系统提示词
         { content: promptItems[promptKey].prompt, role: "system" },
         // 课程模板
-        { content: aiTemplateRef.current, role: "user" },
+        { content: classContent, role: "user" },
         // 学生姓名
         {
           content: `学员姓名: ${studentsList[index]?.name || ""}`,
@@ -630,13 +695,22 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         },
       );
     },
-    [content_form, promptItems, promptKey, studentsList, updateStudentInfo],
+    [
+      content_form,
+      getAIClassContent,
+      handleSubmit,
+      promptItems,
+      promptKey,
+      sendWarning,
+      studentsList,
+      updateStudentInfo,
+    ],
   );
 
   // 处理AI优化学生课堂表现的回调函数
   const handleAIOptimize = useCallback(() => {
-    if (isFinishedRef.current === false) {
-      sendWarning("请先完成课程信息的填写. 或再次点击提交按钮.");
+    if (!getAIClassContent()) {
+      sendWarning("请先补完整课程信息。");
       return;
     }
     if (API.tokenReady() === false) {
@@ -649,21 +723,40 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         handleSingleAIOptimize(index);
       }
     }
-  }, [handleSingleAIOptimize, sendWarning, studentsList, studentsInfo]);
+  }, [
+    getAIClassContent,
+    handleSingleAIOptimize,
+    sendWarning,
+    studentsList,
+    studentsInfo,
+  ]);
 
   // 加载历史数据
   const handleLoadHistoryData = useCallback(
     (key: string) => {
       const data = history[key];
       if (data) {
-        class_form.setFieldsValue({
+        const fieldsToUpdate: {
+          "course-name": string;
+          "course-contents": { item: string }[];
+          "course-objectives": { item: string }[];
+          "course-time"?: [dayjs.Dayjs, dayjs.Dayjs];
+        } = {
           "course-name": data.courseName,
           "course-contents": data.courseContents,
           "course-objectives": data.courseObjectives,
-          //   "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
-        });
+        };
+
+        if (data.time) {
+          fieldsToUpdate["course-time"] = [
+            dayjs(data.time[0]),
+            dayjs(data.time[1]),
+          ];
+        }
+
+        class_form.setFieldsValue(fieldsToUpdate);
       }
-      handleSubmit();
+      window.setTimeout(handleSubmit, 0);
     },
     [class_form, history, handleSubmit],
   );
@@ -671,28 +764,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   // 复制单个学生内容（带模板）
   const handleCopyStudentWithTemplate = useCallback(
     (index: number) => {
-      // 获取表单数据
-      const data = class_form.getFieldsValue();
-      // 添加get方法以便获取表单字段值
-      const get = (key: string) => data[key];
-
-      // 获取课程名称
-      const courseName = get("course-name") as string;
-
-      // 获取课程内容并格式化为列表
-      const courseContents =
-        get("course-contents")?.map(
-          (item: { item: string }) => `- ${item.item}\n`,
-        ) || [];
-
-      // 获取教学目标并格式化为列表
-      const courseObjectives =
-        get("course-objectives")?.map(
-          (item: { item: string }) => `- ${item.item}\n`,
-        ) || [];
-
-      // 获取课程时间范围
-      const time = get("course-time") as [dayjs.Dayjs, dayjs.Dayjs] | undefined;
+      const courseContext = getCourseTemplateContext();
+      if (!courseContext) {
+        sendWarning("请先补完整课程信息。");
+        return;
+      }
 
       // 获取学生信息
       const student = studentsList[index];
@@ -702,12 +778,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       let result = `### ${student.name}\n`;
 
       // 使用封装的替换函数处理模板
-      const studentTemplate = replaceTemplate(exportTemplate, {
+      const studentTemplate = replaceTemplate(customTemplate, {
         studentName: student.name,
-        courseName,
-        courseTime: time,
-        courseContents,
-        courseObjectives,
+        courseName: courseContext.courseName,
+        courseTime: courseContext.courseTime,
+        courseContents: courseContext.courseContents,
+        courseObjectives: courseContext.courseObjectives,
         signature,
         courseFeedback: studentsInfo[index]?.content || "",
       });
@@ -718,9 +794,10 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       copyToClipboard(result);
     },
     [
-      class_form,
       copyToClipboard,
-      exportTemplate,
+      customTemplate,
+      getCourseTemplateContext,
+      sendWarning,
       signature,
       studentsList,
       studentsInfo,
@@ -736,7 +813,6 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
 
       // 更新状态
       setCustomTemplate(newTemplate);
-      setExportTemplate(newTemplate);
       setSignature(newSignature);
 
       // 关闭模态框
@@ -970,35 +1046,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         tooltip="导出内容到剪切板."
         style={{ insetInlineEnd: 24 + 24 + 24 }}
         onClick={() => {
-          // 检查表单是否已提交
-          if (!isFinishedRef.current) {
-            sendWarning("内容可能不完整, 或未点击提交按钮.");
+          const courseContext = getCourseTemplateContext();
+          if (!courseContext) {
+            sendWarning("请先补完整课程信息。");
+            return;
           }
-
-          // 获取表单数据
-          const data = class_form.getFieldsValue();
-          // 添加get方法以便获取表单字段值
-          const get = (key: string) => data[key];
-
-          // 获取课程名称
-          const courseName = get("course-name") as string;
-
-          // 获取课程内容并格式化为列表
-          const courseContents =
-            get("course-contents")?.map(
-              (item: { item: string }) => `- ${item.item}\n`,
-            ) || [];
-
-          // 获取教学目标并格式化为列表
-          const courseObjectives =
-            get("course-objectives")?.map(
-              (item: { item: string }) => `- ${item.item}\n`,
-            ) || [];
-
-          // 获取课程时间范围
-          const time = get("course-time") as
-            | [dayjs.Dayjs, dayjs.Dayjs]
-            | undefined;
 
           // 构建导出结果
           let result = "";
@@ -1007,12 +1059,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             result += `### ${student.name}\n`;
 
             // 使用封装的替换函数处理模板
-            const studentTemplate = replaceTemplate(exportTemplate, {
+            const studentTemplate = replaceTemplate(customTemplate, {
               studentName: student.name,
-              courseName,
-              courseTime: time,
-              courseContents,
-              courseObjectives,
+              courseName: courseContext.courseName,
+              courseTime: courseContext.courseTime,
+              courseContents: courseContext.courseContents,
+              courseObjectives: courseContext.courseObjectives,
               signature,
               courseFeedback: studentsInfo[index]?.content || "",
             });
@@ -1034,35 +1086,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         tooltip="导出内容到剪切板(不包括空反馈的学生以及没有打勾的学生)."
         style={{ insetInlineEnd: 24 }}
         onClick={() => {
-          // 检查表单是否已提交
-          if (!isFinishedRef.current) {
-            sendWarning("内容可能不完整, 或未点击提交按钮.");
+          const courseContext = getCourseTemplateContext();
+          if (!courseContext) {
+            sendWarning("请先补完整课程信息。");
+            return;
           }
-
-          // 获取表单数据
-          const data = class_form.getFieldsValue();
-          // 添加get方法以便获取表单字段值
-          const get = (key: string) => data[key];
-
-          // 获取课程名称
-          const courseName = get("course-name") as string;
-
-          // 获取课程内容并格式化为列表
-          const courseContents =
-            get("course-contents")?.map(
-              (item: { item: string }) => `- ${item.item}\n`,
-            ) || [];
-
-          // 获取教学目标并格式化为列表
-          const courseObjectives =
-            get("course-objectives")?.map(
-              (item: { item: string }) => `- ${item.item}\n`,
-            ) || [];
-
-          // 获取课程时间范围
-          const time = get("course-time") as
-            | [dayjs.Dayjs, dayjs.Dayjs]
-            | undefined;
 
           // 构建导出结果
           let result = "";
@@ -1076,12 +1104,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             result += `### ${student.name}\n`;
 
             // 使用封装的替换函数处理模板
-            const studentTemplate = replaceTemplate(exportTemplate, {
+            const studentTemplate = replaceTemplate(customTemplate, {
               studentName: student.name,
-              courseName,
-              courseTime: time,
-              courseContents,
-              courseObjectives,
+              courseName: courseContext.courseName,
+              courseTime: courseContext.courseTime,
+              courseContents: courseContext.courseContents,
+              courseObjectives: courseContext.courseObjectives,
               signature,
               courseFeedback: studentsInfo[index]?.content || "",
             });

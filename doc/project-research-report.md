@@ -1,6 +1,7 @@
 # create-course-feedback 项目整体研究报告
 
 生成时间：2026-06-03
+本次同步更新：2026-06-04
 
 ## 1. 项目概览
 
@@ -26,16 +27,16 @@
 - 根组件：`src/App.tsx`
 - 页面外壳：`src/Page.tsx`
 - 业务主控组件：`src/components/MainUI.tsx`
-- UI 组件库：Ant Design 5
+- UI 组件库：Ant Design 6
 - 状态管理：React state/hooks + Zustand
 - 本地持久化：`localStorage` + Dexie/IndexedDB
 - AI 调用：浏览器端 `fetch` 直接请求各模型服务商接口
 
-`vite.config.ts` 注入 `__APP_VERSION__`，配置 `vite-plugin-svgr`、生产构建压缩、手动分包和 `rollup-plugin-visualizer`。构建时 React/Ant Design 被归入 `vendor-react-antd`，DayJS 单独归入 `vendor-dayjs`。
+`vite.config.ts` 注入 `__APP_VERSION__`，配置 `vite-plugin-svgr`、生产构建压缩、手动分包和 `rollup-plugin-visualizer`。构建时 React/Ant Design 被归入 `vendor-react-antd`，DayJS 单独归入 `vendor-dayjs`。本次依赖升级后，项目使用 React 19.2、Ant Design 6、Vite 8 和 `@vitejs/plugin-react` 6，`src/main.tsx` 不再需要 Ant Design v5 的 React 19 patch。
 
 ### 2.2 依赖与包管理
 
-`package.json` 指定 `packageManager` 为 Yarn 1.22.22，但仓库同时存在 `package-lock.json` 和 `yarn.lock`。这说明项目历史上可能混用过 npm/yarn。CI 工作流使用 `yarn install --frozen-lockfile`，因此实际部署链路以 `yarn.lock` 为准。
+`package.json` 指定 `packageManager` 为 Yarn 4.16.0。项目通过 Corepack 使用 Yarn，并在 `.yarnrc.yml` 中设置 `nodeLinker: node-modules`，因此依然使用项目本地 `node_modules`。仓库已移除 npm lockfile，实际依赖锁定以 `yarn.lock` 为准。
 
 值得注意的是，项目源码多处直接 `import dayjs from "dayjs"`，但 `package.json` 的直接依赖中没有声明 `dayjs`。目前构建能成功，通常是因为 Ant Design 间接安装了 DayJS；不过直接使用转移依赖属于隐性风险，建议把 `dayjs` 加入直接依赖。
 
@@ -49,7 +50,7 @@
 生产构建命令是：
 
 ```bash
-npm run build
+yarn build
 ```
 
 脚本实际执行：
@@ -68,7 +69,6 @@ tsc -b && vite build
 
 `src/App.tsx` 做三件事：
 
-- 引入 Ant Design React 19 patch。
 - 配置 Ant Design 中文 locale 与基础主题。
 - 创建全局 message API，将 `sendMessage` 和 `sendWarning` 传给 `Page`。
 
@@ -169,6 +169,8 @@ AI 调用封装在 `src/AI_API/API.ts`。
 
 默认模板和 AI 请求模板都定义在 `MainUI` 中。默认导出模板包含课程信息、课堂表现、签名和日期；AI 请求模板只包含课程信息，不包含最终导出的外层结构。
 
+本次改动后，`MainUI` 不再维护独立的 `exportTemplate` state 或 `aiTemplateRef` 缓存，而是在 AI 发送和导出时通过 `getCourseTemplateContext()` 同步读取当前表单，再用 `replaceTemplate` 编译课程上下文。这修复了课程字段已经保存但发送给 AI 的内容仍保留 `{{courseName}}`、`{{courseTime}}` 等占位符的问题。
+
 ### 3.7 版本更新提示
 
 `src/Version.ts` 读取：
@@ -190,7 +192,8 @@ AI 调用封装在 `src/AI_API/API.ts`。
   |     -> localStorage[className]
   |     -> localStorage["class-name"]
   |     -> localStorage["class-history"]
-  |     -> exportTemplate / aiTemplateRef
+  |     -> getCourseTemplateContext()
+  |     -> AI 发送和导出时按需编译模板
   |
   |-- 学生名单输入
   |     -> StringListInput
@@ -213,7 +216,7 @@ AI 调用封装在 `src/AI_API/API.ts`。
 
 ```text
 AI 生成路径:
-课程模板 + 提示词 + 学生姓名 + 学生表现
+当前课程上下文 + 提示词 + 学生姓名 + 学生表现
   -> new API().sendMessage(...)
   -> 供应商接口
   -> streaming content/reasoning_content
@@ -222,7 +225,7 @@ AI 生成路径:
 
 ```text
 导出路径:
-课程表单 + studentsList + studentsInfo[index].content + exportTemplate
+当前课程上下文 + studentsList + studentsInfo[index].content + customTemplate
   -> replaceTemplate(...)
   -> Markdown 字符串
   -> navigator.clipboard.writeText(...)
@@ -241,17 +244,20 @@ AI 生成路径:
 `MainUI.handleSubmit` 会做以下处理：
 
 1. 从 Ant Design form 读取字段。
-2. 将课程内容和教学目标格式化为 Markdown 列表。
-3. 用 `replaceTemplate` 生成当前导出模板 `exportTemplate`。
-4. 用固定 `AI_TEMPLATE` 生成 AI 请求用课程上下文 `aiTemplateRef.current`。
-5. 将班级时间保存到 `localStorage[className]`。
-6. 将班级名加入 `localStorage["class-name"]`。
-7. 将课程内容加入 `localStorage["class-history"]`，最多保留 20 条。
-8. 标记 `isFinishedRef.current = true`。
+2. 通过 `normalizeCourseItems` 清理课程内容和教学目标。
+3. 通过 `hasCompleteCourseTime` 确认授课时间完整。
+4. 将班级时间保存到 `localStorage[className]`。
+5. 将班级名加入 `localStorage["class-name"]`。
+6. 将课程内容加入 `localStorage["class-history"]`，最多保留 20 条。
+7. 标记 `isFinishedRef.current = true`。
+
+AI 请求和导出不会依赖上一次提交时缓存的模板字符串，而是调用 `getCourseTemplateContext()` 读取当前表单。课程信息不完整时，AI 生成和导出会提示先补完整课程信息。
 
 历史记录导入时，`handleLoadHistoryData` 会回填课程名称、课程内容和教学目标，然后再次调用 `handleSubmit`。
 
 班级导入时，`importClass` 会读取 `localStorage[className]`，将历史授课时间平移到“上周同一天同一时间”，再加载该班学生名单。
+
+`CourseInfoCard` 的班级名输入已经从普通选择改为更完整的自动完成流程：输入框获得焦点时会展开已保存班级；搜索时按输入过滤；选择、按 Enter 或失焦时会尝试匹配已有班级并触发 `onClassSelect`。匹配逻辑支持大小写不敏感，失焦加载带有短延迟，用于避开点击下拉选项时的事件竞争。授课时间、课程内容和教学目标的编辑也会请求自动提交，从而减少教师额外点击。
 
 ### 4.3 学生名单流
 
@@ -318,7 +324,7 @@ V2：`src/components/StudentContentCard/StudentInputs/V2Input.tsx`
 单人 AI 请求包含四类 message：
 
 1. system：当前提示词。
-2. user：课程信息 AI 模板。
+2. user：实时编译后的课程信息。
 3. user：学员姓名。
 4. user：学生课堂表现原始内容。
 
@@ -339,7 +345,7 @@ AI 响应流中：
 导出过程都依赖 `replaceTemplate`：
 
 ```text
-exportTemplate + 课程字段 + 学生姓名 + studentsInfo[index].content
+customTemplate + 当前课程字段 + 学生姓名 + studentsInfo[index].content
   -> Markdown
   -> clipboard
 ```
@@ -386,9 +392,13 @@ Dexie 数据库：`StorageDatabase`
 
 学生输入体验有明显迭代。V1 的自由文本适合快速输入，V2 的结构化字段适合批量稳定生产反馈。输入建议和快捷选项会被自动记忆，符合教师重复处理相似班级和相似评价的使用场景。
 
+课程信息交互正在向“少点提交、多用自动完成”的方向收敛。班级名输入现在能在获得焦点时直接显示已保存班级，并在选择、回车或失焦时加载班级信息；课程时间、课程内容和教学目标的修改也会触发自动保存。
+
 AI 提示词和供应商配置比较灵活。项目支持多个常见 AI 供应商和自定义兼容接口，也允许自定义提示词，实际使用时不被单一服务商锁死。
 
 模板系统有实际价值。最终导出不是简单拼接 AI 输出，而是允许教师维护格式、签名、日期和课程字段，从而适配不同教学机构或家长沟通格式。
+
+本次模板链路修复也验证了一个重要方向：AI 请求前必须明确编译课程上下文，不能把可见模板、缓存模板和表单草稿混在一起。当前 `getCourseTemplateContext()` / `getAIClassContent()` 仍在 `MainUI` 内，但已经比旧的 `aiTemplateRef` 缓存更可控。
 
 工程配置有基础质量保障。TypeScript 开启 strict，生产构建执行 `tsc -b`，ESLint 与 GitHub Pages 部署工作流已经配置。
 
@@ -404,7 +414,7 @@ AI 提示词和供应商配置比较灵活。项目支持多个常见 AI 供应�
 
 第五，项目没有发现测试文件。当前验证主要依赖 TypeScript、ESLint 和人工操作。对模板替换、历史迁移、学生名单解析、AI 流式解析、导出过滤这些核心逻辑来说，缺少自动化测试会增加回归风险。
 
-第六，包管理和依赖声明存在小的不一致。仓库同时存在 `package-lock.json` 和 `yarn.lock`，CI 走 Yarn；源码直接使用 DayJS 但 `package.json` 未声明直接依赖。
+第六，依赖声明仍有一个小的不一致：源码直接使用 DayJS，但 `package.json` 未声明直接依赖。目前包管理已经收敛到 Yarn 4 + `yarn.lock`，npm lockfile 混用问题已解决。
 
 第七，运行期调试日志较多。`API.ts`、`MainUI.tsx`、`CourseInfoCard.tsx`、`SettingsDrawer.tsx` 等文件仍有多处 `console.log`。生产构建配置会移除部分 console，但调试日志仍会影响开发噪声，也可能在非生产构建中暴露请求内容。
 
@@ -417,14 +427,15 @@ AI 提示词和供应商配置比较灵活。项目支持多个常见 AI 供应�
 本次检查执行了：
 
 ```bash
-npm run lint
-npm run build
+yarn lint
+yarn build
 ```
 
 结果：
 
-- `npm run lint` 成功，有 1 个 warning：`src/updateInfo.tsx` 中 `useEffect` 缺少 `version` 依赖。
-- `npm run build` 成功，执行了 `tsc -b && vite build`。
+- `yarn lint` 成功，`src/updateInfo.tsx` 的 hook dependency warning 已通过 `useMemo` 稳定 `Version.getInstance()` 后清理。
+- `yarn build` 成功，执行了 `tsc -b && vite build`。
+- Ant Design 6 迁移相关的主要 warning 已处理：`CourseInfoCard` 使用 `onOpenChange`，`Input addonBefore/addonAfter` 改为 `Space.Compact`，`updateInfo.tsx` 不再依赖旧的 `List` 用法。
 - Vite 构建输出中 `vendor-react-antd` gzip 后约 305 KB，是最大的 chunk。
 - 构建输出提示 `baseline-browser-mapping` 数据超过两个月，建议更新。
 - 未发现 `*.test.*`、`*.spec.*` 或 `__tests__` 测试文件。
@@ -452,7 +463,7 @@ npm run build
 
 4. 修正依赖声明。
    - 把 `dayjs` 加入 `dependencies`。
-   - 统一使用 Yarn 或 npm，删除不使用的 lockfile。
+   - 保持 Corepack + Yarn 4 + 本地 `node_modules` 作为默认安装方式。
 
 ### 7.2 中优先级
 
@@ -461,20 +472,25 @@ npm run build
    - 避免实例字段 `messages.messages` 累积历史上下文。
    - 将不同 provider 的 payload 构造拆成独立函数。
 
-2. 补全备份能力。
+2. 抽出课程上下文与模板编译。
+   - 将 `getCourseTemplateContext()` 从 `MainUI` 移到可测试的 service 或纯函数模块。
+   - 将 AI 课程上下文和导出模板编译拆成明确的 compiler。
+   - 为“课程信息不完整”“模板占位符替换”“列表项清理”补测试。
+
+3. 补全备份能力。
    - 当前只导出 localStorage。
    - 输入助手数据在 IndexedDB，应纳入备份/恢复。
    - 对 raw string 和 JSON string 两种 localStorage 值做统一序列化，避免模板、签名、提示词 key 等被跳过。
 
-3. 减少调试日志。
+4. 减少调试日志。
    - 保留必要错误日志。
    - 删除会打印请求体、学生表单内容、API body 的日志。
 
-4. 强化错误反馈。
+5. 强化错误反馈。
    - AI 请求失败时目前主要 `console.error`，用户侧反馈不足。
    - 应把网络错误、认证失败、模型列表加载失败等展示为 message 或卡片状态。
 
-5. 修正自定义提示词持久化。
+6. 修正自定义提示词持久化。
    - 明确只保存自定义提示词，或接受保存完整提示词集合。
    - 如果要只保存自定义提示词，应把 `savePromptToLocalStorage` 最终写入值改为过滤后的对象。
 

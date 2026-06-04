@@ -29,7 +29,7 @@ export interface HistoryType {
   courseName: string;
   courseContents: { item: string }[];
   courseObjectives: { item: string }[];
-  time: [string, string];
+  time: [string, string] | undefined;
 }
 
 export interface HistorysType {

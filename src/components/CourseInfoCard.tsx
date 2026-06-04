@@ -1,4 +1,4 @@
-import { FC, useCallback } from "react";
+import { FC, useCallback, useEffect, useState } from "react";
 import {
   AutoComplete,
   Button,
@@ -7,7 +7,6 @@ import {
   Flex,
   Form,
   Input,
-  Select,
   Tooltip,
   theme,
 } from "antd";
@@ -30,8 +29,8 @@ export interface CourseInfoCardProps {
   form: FormInstance;
   classList: string[];
   history: HistorysType;
-  onSubmit: () => void;
-  onImport: () => void;
+  onHandleSubmit: () => void;
+  //   onImport: () => void;
   onAIOptimize: () => void;
   onTemplateEdit: () => void;
   onClassSelect: (className: string) => void;
@@ -46,8 +45,8 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
   form,
   classList,
   history,
-  onSubmit,
-  onImport,
+  //   onImport,
+  onHandleSubmit,
   onAIOptimize,
   onTemplateEdit,
   onClassSelect,
@@ -55,6 +54,27 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
   onHistoryDelete,
 }) => {
   const { token } = useToken();
+  const [timePlState, setTimePlState] = useState<{
+    isOpen: boolean;
+    isFocused: boolean;
+  }>({ isOpen: false, isFocused: false });
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
+
+  const handleClassLoad = useCallback(
+    (value: string | undefined) => {
+      const className = value?.trim();
+      if (!className || !classList.includes(className)) return;
+      setIsClassDropdownOpen(false);
+      onClassSelect(className);
+    },
+    [classList, onClassSelect],
+  );
+
+  useEffect(() => {
+    if (!timePlState.isFocused && !timePlState.isOpen) {
+      onHandleSubmit();
+    }
+  }, [timePlState, onHandleSubmit]);
 
   // 处理历史记录删除
   const handleHistoryDelete = useCallback(
@@ -62,7 +82,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
       event.stopPropagation();
       onHistoryDelete(key);
     },
-    [onHistoryDelete]
+    [onHistoryDelete],
   );
 
   return (
@@ -86,29 +106,28 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
       }}
       actions={[
         // 提交按钮
-        <Button
-          key="submit"
-          style={{ width: "100%" }}
-          type="link"
-          htmlType="submit"
-          onClick={onSubmit}
-        >
-          提交
-        </Button>,
+        // <Button
+        //   key="submit"
+        //   style={{ width: "100%" }}
+        //   type="link"
+        //   htmlType="submit"
+        // >
+        //   提交
+        // </Button>,
         // AI优化按钮
         <Button key="ai" type="link" onClick={onAIOptimize}>
           <ThunderboltOutlined />
           AI 优化
         </Button>,
         // 导入按钮
-        <Button
-          key="import"
-          style={{ width: "100%" }}
-          type="link"
-          onClick={onImport}
-        >
-          导入
-        </Button>,
+        // <Button
+        //   key="import"
+        //   style={{ width: "100%" }}
+        //   type="link"
+        //   onClick={onImport}
+        // >
+        //   导入
+        // </Button>,
         // 自定义模板按钮
         <Button
           key="template"
@@ -122,29 +141,46 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
       ]}
     >
       {/* 班级名 表单项 */}
-      <Form.Item
-        label="班级名"
-        name="class-name"
-        rules={[{ required: true }]}
-      >
-        <Input
-          addonAfter={
-            <Select
-              defaultValue={null}
-              notFoundContent="无录入班级信息"
-              placeholder="选择班级"
-              style={{ width: 120 }}
-              onSelect={(value: string | null) => {
-                if (value !== null) {
-                  onClassSelect(value);
-                }
-              }}
-              options={classList.map((item) => ({
-                value: item,
-                label: item,
-              }))}
-            />
+      <Form.Item label="班级名" name="class-name" rules={[{ required: true }]}>
+        <AutoComplete
+          options={classList.map((item) => ({
+            value: item,
+            label: <span>{item}</span>,
+          }))}
+          open={isClassDropdownOpen && classList.length > 0}
+          onOpenChange={setIsClassDropdownOpen}
+          onFocus={() => setIsClassDropdownOpen(classList.length > 0)}
+          onSelect={(value) => handleClassLoad(value)}
+          onSearch={() => setIsClassDropdownOpen(classList.length > 0)}
+          onBlur={(event) => {
+            setIsClassDropdownOpen(false);
+            handleClassLoad((event.target as HTMLInputElement).value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            handleClassLoad((event.target as HTMLInputElement).value);
+          }}
+          filterOption={(inputValue, option) =>
+            !inputValue ||
+            option?.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
           }
+          // addonAfter={
+          //   <Select
+          //     defaultValue={null}
+          //     notFoundContent="无录入班级信息"
+          //     placeholder="选择班级"
+          //     style={{ width: 120 }}
+          //     onSelect={(value: string | null) => {
+          //       if (value !== null) {
+          //         onClassSelect(value);
+          //       }
+          //     }}
+          //     options={classList.map((item) => ({
+          //       value: item,
+          //       label: item,
+          //     }))}
+          //   />
+          // }
         />
       </Form.Item>
 
@@ -176,7 +212,9 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     </span>
                     <Flex gap={10} align="center">
                       <span style={{ color: "gray", fontSize: "12px" }}>
-                        {dayjs(item.time[0]).format("YYYY-MM-DD")}
+                        {item.time
+                          ? dayjs(item.time[0]).format("YYYY-MM-DD")
+                          : "--"}
                       </span>
                       <Button
                         icon={
@@ -209,15 +247,25 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
       <Form.Item
         label="授课时间"
         name="course-time"
-        rules={[{ required: true }]}
+        rules={[{ required: true, message: "请选择授课时间" }]}
       >
         <RangePicker
+          onOpenChange={(isTimeOpen) =>
+            setTimePlState({ ...timePlState, isOpen: isTimeOpen })
+          }
+          onBlur={() => setTimePlState({ ...timePlState, isFocused: false })}
+          onFocus={() => setTimePlState({ ...timePlState, isFocused: true })}
+          minuteStep={10}
           needConfirm={false}
           renderExtraFooter={() => {
             const pickerDate: dayjs.Dayjs[] = form.getFieldValue("course-time");
             const set = (date: dayjs.Dayjs[]) => {
               // 处理循环引用
-              if (pickerDate && date[0].isSame(pickerDate[0]) && date[1].isSame(pickerDate[1])) {
+              if (
+                pickerDate &&
+                date[0].isSame(pickerDate[0]) &&
+                date[1].isSame(pickerDate[1])
+              ) {
                 return;
               }
               form.setFieldValue("course-time", date);
@@ -231,10 +279,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                 }}
                 gap={5}
               >
-                <Tooltip
-                  title="当前选择日期的昨天"
-                  mouseEnterDelay={0.6}
-                >
+                <Tooltip title="当前选择日期的昨天" mouseEnterDelay={0.6}>
                   <Button
                     style={{ padding: 12 }}
                     size="small"
@@ -247,8 +292,15 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                         ]);
                       } else {
                         const today = dayjs();
-                        const start = today.startOf("day").set("hour", 8).subtract(1, "day");
-                        const end = today.startOf("day").set("hour", 9).set("minute", 50).subtract(1, "day");
+                        const start = today
+                          .startOf("day")
+                          .set("hour", 8)
+                          .subtract(1, "day");
+                        const end = today
+                          .startOf("day")
+                          .set("hour", 9)
+                          .set("minute", 50)
+                          .subtract(1, "day");
                         set([start, end]);
                       }
                     }}
@@ -272,8 +324,15 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                         ]);
                       } else {
                         const today = dayjs();
-                        const start = today.startOf("day").set("hour", 8).subtract(1, "week");
-                        const end = today.startOf("day").set("hour", 9).set("minute", 50).subtract(1, "week");
+                        const start = today
+                          .startOf("day")
+                          .set("hour", 8)
+                          .subtract(1, "week");
+                        const end = today
+                          .startOf("day")
+                          .set("hour", 9)
+                          .set("minute", 50)
+                          .subtract(1, "week");
                         set([start, end]);
                       }
                     }}
@@ -281,20 +340,19 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     上周
                   </Button>
                 </Tooltip>
-                <Tooltip
-                  title="将选择的日期设置为今天"
-                  mouseEnterDelay={0.6}
-                >
+                <Tooltip title="将选择的日期设置为今天" mouseEnterDelay={0.6}>
                   <Button
                     style={{ padding: 12 }}
                     size="small"
                     type="primary"
                     onClick={() => {
                       let start = dayjs().startOf("day").set("hour", 8);
-                      let end = dayjs().startOf("day").set("hour", 9).set("minute", 50);
+                      let end = dayjs()
+                        .startOf("day")
+                        .set("hour", 9)
+                        .set("minute", 50);
                       console.log("pickerDate", pickerDate);
-                      if (pickerDate)
-                      {
+                      if (pickerDate) {
                         start = start
                           .set("hour", pickerDate[0].hour())
                           .set("minute", pickerDate[0].minute())
@@ -326,9 +384,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
             {
               validator: async (_, contents) => {
                 if (!contents || contents.length < 1) {
-                  return Promise.reject(
-                    new Error("至少需要有一个课程内容"),
-                  );
+                  return Promise.reject(new Error("至少需要有一个课程内容"));
                 }
               },
             },
@@ -344,7 +400,13 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
             >
               {/* 遍历课程内容字段 */}
               {fields.map((subField) => (
-                <Flex key={subField.key} gap={16} align="center" justify="space-between" style={{ width: "100%" }}>
+                <Flex
+                  key={subField.key}
+                  gap={16}
+                  align="center"
+                  justify="space-between"
+                  style={{ width: "100%" }}
+                >
                   <Form.Item
                     noStyle
                     name={[subField.name, "item"]}
@@ -358,6 +420,13 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                         opt.add();
                       }}
                       placeholder="填写课程内容"
+                      onBlur={(e) => {
+                        const value = (e.target as HTMLInputElement).value;
+                        // 如果不是空, 则自动提交表单
+                        if (value.trim()) {
+                          onHandleSubmit();
+                        }
+                      }}
                     />
                   </Form.Item>
                   {/* 删除按钮 */}
@@ -386,9 +455,7 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
             {
               validator: async (_, objectives) => {
                 if (!objectives || objectives.length < 1) {
-                  return Promise.reject(
-                    new Error("至少需要有一个课程目标"),
-                  );
+                  return Promise.reject(new Error("至少需要有一个课程目标"));
                 }
               },
             },
@@ -403,7 +470,13 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
               }}
             >
               {fields.map((subField) => (
-                <Flex key={subField.key} gap={16} align="center" justify="space-between" style={{ width: "100%" }}>
+                <Flex
+                  key={subField.key}
+                  gap={16}
+                  align="center"
+                  justify="space-between"
+                  style={{ width: "100%" }}
+                >
                   <Form.Item
                     noStyle
                     name={[subField.name, "item"]}
@@ -412,6 +485,13 @@ const CourseInfoCard: FC<CourseInfoCardProps> = ({
                     <Input
                       style={{
                         width: "100%",
+                      }}
+                      onBlur={(e) => {
+                        const value = (e.target as HTMLInputElement).value;
+                        // 如果不是空, 则自动提交表单
+                        if (value.trim()) {
+                          onHandleSubmit();
+                        }
                       }}
                       placeholder="填写课程内容"
                     />

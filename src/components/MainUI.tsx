@@ -59,6 +59,7 @@ import {
 
 // 导入自定义Hook
 import { useStudentsManager } from "../hooks";
+import { useInputAssistantStore } from "../store/InputAssistantStore";
 
 // 导入常量和工具函数
 import { PROMPTS } from "./constants";
@@ -105,7 +106,6 @@ const HISTORY_LENGTH = 20; // 历史记录的最大长度
 // 定义可用的占位符
 // const PLACEHOLDERS = {...};
 
-
 // 定义组件Props接口
 interface MainUIProps {
   // 发送普通消息的函数
@@ -127,20 +127,23 @@ const { useToken } = theme;
 
 // 智能预加载函数 - 使用 requestIdleCallback 在空闲时预加载
 const preloadComponents = () => {
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => {
-      const promises = [
-        import("./StringListInput"),
-        import("./SettingsDrawer"),
-        import("./StudentsList"),
-        import("./TemplateEditor"),
-        import("./CourseInfoCard"),
-      ];
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(
+      () => {
+        const promises = [
+          import("./StringListInput"),
+          import("./SettingsDrawer"),
+          import("./StudentsList"),
+          import("./TemplateEditor"),
+          import("./CourseInfoCard"),
+        ];
 
-      Promise.all(promises).catch((error) => {
-        console.error("组件预加载失败:", error);
-      });
-    }, { timeout: 2000 });
+        Promise.all(promises).catch((error) => {
+          console.error("组件预加载失败:", error);
+        });
+      },
+      { timeout: 2000 },
+    );
   } else {
     // 降级到 setTimeout
     setTimeout(() => {
@@ -194,6 +197,14 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     getStudentNames,
     getActivatedStudentsCount,
   } = useStudentsManager();
+
+  // 使用输入助手 Store
+  const loadV1Suggestions = useInputAssistantStore(
+    (state) => state.loadV1Suggestions,
+  );
+  const loadV2CustomOptions = useInputAssistantStore(
+    (state) => state.loadV2CustomOptions,
+  );
   // 提示词Key
   const [promptKey, setPromptKey] = useState<PromptType>("programming");
   // 提示词内容
@@ -241,7 +252,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       "class-history",
       "feedback-template",
       "signature",
-      "ai-model"
+      "ai-model",
     ];
 
     // 使用优化的批量读取函数
@@ -307,10 +318,18 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 延迟预加载组件
     preloadComponents();
 
+    // 加载输入助手数据
+    loadV1Suggestions().catch((error) => {
+      console.error("Failed to load V1 suggestions:", error);
+    });
+    loadV2CustomOptions().catch((error) => {
+      console.error("Failed to load V2 custom options:", error);
+    });
+
     return () => {
       unsubscribe();
     };
-  }, [sendMessage]);
+  }, [sendMessage, loadV1Suggestions, loadV2CustomOptions]);
 
   // 拷贝到剪切板
   const copyToClipboard = useCallback(
@@ -333,7 +352,11 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     // 获取班级名称
     const className: string = data.get("class-name");
     // 获取课程名称
-    const courseName = data.get("course-name") as string;
+    const courseName = data.get("course-name") as string | undefined;
+    if (!courseName) {
+      sendMessage("班级信息导入完成, 请继续填写或导入课程信息.");
+      return;
+    }
     // 获取课程内容并格式化为列表
     const courseContents = data
       .get("course-contents")
@@ -368,14 +391,19 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
     aiTemplateRef.current = aiProcessedTemplate;
 
     // 保存班级数据到本地存储
-    const saveData: ClassTime = {
-      time: {
-        first: time[0].format("YYYY-MM-DD HH:mm"),
-        last: time[1].format("YYYY-MM-DD HH:mm"),
-      },
-    };
+    if (time) {
+      const saveData: ClassTime = {
+        time: {
+          first: time[0].format("YYYY-MM-DD HH:mm"),
+          last: time[1].format("YYYY-MM-DD HH:mm"),
+        },
+      };
 
-    localStorage.setItem(className, JSON.stringify(saveData));
+      localStorage.setItem(className, JSON.stringify(saveData));
+    } else {
+      sendMessage("请先选择授课时间.");
+      return;
+    }
     const classList = addToLocalStorageArray("class-name", className);
     setClasses(classList);
 
@@ -388,7 +416,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       courseName,
       courseContents: data.get("course-contents"),
       courseObjectives: data.get("course-objectives"),
-      time: [time[0].toISOString(), time[1].toISOString()],
+      time: time ? [time[0].toISOString(), time[1].toISOString()] : undefined,
     };
 
     // 限制历史记录的长度
@@ -431,7 +459,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           .hour(old_last_time.hour())
           .minute(old_last_time.minute());
 
-        const fieldsToUpdate: { [key: string]: [dayjs.Dayjs, dayjs.Dayjs] | string } = {
+        const fieldsToUpdate: {
+          [key: string]: [dayjs.Dayjs, dayjs.Dayjs] | string;
+        } = {
           "course-time": [new_first_time, new_last_time],
         };
 
@@ -452,22 +482,22 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   );
 
   // 处理导入班级数据的回调函数
-  const handleImport = useCallback(() => {
-    // 从本地存储获取班级数据
-    const key = class_form.getFieldValue("class-name") as string;
-    if (!key || key === "") {
-      sendWarning("请先输入班级名.");
-      return;
-    }
-    importClass(key);
-  }, [class_form, importClass, sendWarning]);
+  //   const handleImport = useCallback(() => {
+  //     // 从本地存储获取班级数据
+  //     const key = class_form.getFieldValue("class-name") as string;
+  //     if (!key || key === "") {
+  //       sendWarning("请先输入班级名.");
+  //       return;
+  //     }
+  //     importClass(key);
+  //   }, [class_form, importClass, sendWarning]);
 
   // 处理班级选择
   const handleClassSelect = useCallback(
     (className: string) => {
       importClass(className, true);
     },
-    [importClass]
+    [importClass],
   );
 
   // 处理历史记录删除
@@ -478,12 +508,9 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       };
       delete newHistory[key];
       setHistory(newHistory);
-      localStorage.setItem(
-        "class-history",
-        JSON.stringify(newHistory),
-      );
+      localStorage.setItem("class-history", JSON.stringify(newHistory));
     },
-    [history]
+    [history],
   );
 
   // 处理单次AI调用
@@ -530,7 +557,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             return {
               ...prevInfo,
               content: cleanedContent,
-              loading: false
+              loading: false,
             };
           });
         },
@@ -552,17 +579,52 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                   // 调试输出
                   const formValues = content_form.getFieldsValue();
                   console.log(`学生${index}的表单数据:`, formValues);
-                  console.log(`学生${index}的content字段:`, formValues.content?.[index]);
+                  console.log(
+                    `学生${index}的content字段:`,
+                    formValues.content?.[index],
+                  );
 
-                  const total = content_form.getFieldValue(["content", index, "total"]) ?? "";
-                  const mastery = content_form.getFieldValue(["content", index, "mastery_situation"]) ?? "";
-                  const attention = content_form.getFieldValue(["content", index, "attention"]) ?? "";
-                  const interaction = content_form.getFieldValue(["content", index, "interaction"]) ?? "";
-                  const other = content_form.getFieldValue(["content", index, "other"]) ?? "";
+                  const total =
+                    content_form.getFieldValue(["content", index, "total"]) ??
+                    "";
+                  const mastery =
+                    content_form.getFieldValue([
+                      "content",
+                      index,
+                      "mastery_situation",
+                    ]) ?? "";
+                  const attention =
+                    content_form.getFieldValue([
+                      "content",
+                      index,
+                      "attention",
+                    ]) ?? "";
+                  const interaction =
+                    content_form.getFieldValue([
+                      "content",
+                      index,
+                      "interaction",
+                    ]) ?? "";
+                  const other =
+                    content_form.getFieldValue(["content", index, "other"]) ??
+                    "";
 
-                  console.log(`学生${index}各字段值:`, {total, mastery, attention, interaction, other});
+                  console.log(`学生${index}各字段值:`, {
+                    total,
+                    mastery,
+                    attention,
+                    interaction,
+                    other,
+                  });
 
-                  return getStudentContentV2Text(studentsList[index].gender, total, mastery, attention, interaction, other);
+                  return getStudentContentV2Text(
+                    studentsList[index].gender,
+                    total,
+                    mastery,
+                    attention,
+                    interaction,
+                    other,
+                  );
                 })(),
           role: "user",
         },
@@ -598,11 +660,12 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           "course-name": data.courseName,
           "course-contents": data.courseContents,
           "course-objectives": data.courseObjectives,
-        //   "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
+          //   "course-time": [dayjs(data.time[0]), dayjs(data.time[1])],
         });
       }
+      handleSubmit();
     },
-    [class_form, history],
+    [class_form, history, handleSubmit],
   );
 
   // 复制单个学生内容（带模板）
@@ -685,9 +748,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
   return (
     <>
       {/* 设置抽屉 */}
-      <Suspense fallback={
-        <Spin size="large" />
-      }>
+      <Suspense fallback={<Spin size="large" />}>
         <SettingsDrawer
           open={open}
           setOpen={setOpen}
@@ -702,14 +763,14 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
       </Suspense>
 
       {/* 模板编辑器 */}
-        <TemplateEditor
-          isOpen={isTemplateModalVisible}
-          onClose={() => setIsTemplateModalVisible(false)}
-          onSave={handleTemplateSave}
-          initialTemplate={customTemplate}
-          initialSignature={signature}
-          sendMessage={sendMessage}
-        />
+      <TemplateEditor
+        isOpen={isTemplateModalVisible}
+        onClose={() => setIsTemplateModalVisible(false)}
+        onSave={handleTemplateSave}
+        initialTemplate={customTemplate}
+        initialSignature={signature}
+        sendMessage={sendMessage}
+      />
 
       {/* 主体内容 */}
       <Row gutter={[72, 64]}>
@@ -722,7 +783,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
             form={class_form}
             name="course-info"
             autoComplete="off"
-            onFinish={handleSubmit}
+            // onFinish={handleSubmit}
             onFieldsChange={() => (isFinishedRef.current = false)}
             initialValues={{ items: [{}] }}
           >
@@ -732,8 +793,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                 form={class_form}
                 classList={classList}
                 history={history}
-                onSubmit={handleSubmit}
-                onImport={handleImport}
+                // onImport={handleImport}
+                onHandleSubmit={handleSubmit}
                 onAIOptimize={handleAIOptimize}
                 onTemplateEdit={() => setIsTemplateModalVisible(true)}
                 onClassSelect={handleClassSelect}
@@ -745,9 +806,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
         </Col>
         <Col span={6}>
           {/* 学生列表输入组件 */}
-          <Suspense fallback={
-            <Spin size="large" />
-          }>
+          <Suspense fallback={<Spin size="large" />}>
             <Flex vertical gap={10}>
               <StringListInput
                 values_={getStudentNames()}
@@ -760,12 +819,16 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                     const className = class_form.getFieldValue("class-name");
                     updateStudentsFromRawValues(raw_values, className);
                   } catch (error) {
-                    sendWarning(error instanceof Error ? error.message : "发生未知错误");
+                    sendWarning(
+                      error instanceof Error ? error.message : "发生未知错误",
+                    );
                   }
                 }}
                 onClear={clearAllStudents}
                 onActive={(index, activated_list) => {
-                  updateStudentInfo(index, { activated: activated_list[index] });
+                  updateStudentInfo(index, {
+                    activated: activated_list[index],
+                  });
                 }}
               />
               {studentsList.length > 0 && (
@@ -791,7 +854,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       icon={<OrderedListOutlined />}
                       size="small"
                       onClick={() => {
-                        const className = class_form.getFieldValue("class-name");
+                        const className =
+                          class_form.getFieldValue("class-name");
                         if (!className) return;
                         sortStudentsByName(className);
                       }}
@@ -804,7 +868,8 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
                       }}
                     >
                       {(() => {
-                        const { activated, total } = getActivatedStudentsCount();
+                        const { activated, total } =
+                          getActivatedStudentsCount();
                         return `${activated}/${total}人`;
                       })()}
                     </Typography.Text>
@@ -821,9 +886,7 @@ const MainUI: FC<MainUIProps> = ({ sendMessage, sendWarning }) => {
           {studentsList.length > 0 && (
             <Form form={content_form} name="student-content">
               {/* 使用优化后的学生列表组件 */}
-              <Suspense fallback={
-                  <Spin size="large" />
-              }>
+              <Suspense fallback={<Spin size="large" />}>
                 <StudentsList
                   students={studentsList}
                   students_info={studentsInfo}

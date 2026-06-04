@@ -61,29 +61,41 @@ export const useStudentsManager = () => {
   const loadStudentsFromStorage = useCallback(
     (className: string) => {
       const studentsStr = localStorage.getItem(`${className}_std`);
+      if (!studentsStr) {
+        setStudentsList([]);
+        setStudentsInfo({});
+        return;
+      }
+
       if (studentsStr) {
         try {
           const data = JSON.parse(studentsStr);
 
+          if (!Array.isArray(data) || data.length === 0) {
+            setStudentsList([]);
+            setStudentsInfo({});
+            return;
+          }
+
           // 兼容旧格式 (字符串数组)
-          if (Array.isArray(data) && data.length > 0) {
-            if (typeof data[0] === "string") {
-              // 旧格式：字符串数组
-              const students = createStudentsFromNames(data);
-              setStudentsList(students);
-              initializeStudentsInfo(students);
-            } else {
-              // 新格式：对象数组，但需要兼容没有version字段的情况
-              const students = (data as StudentBasicInfo[]).map((student) => ({
-                ...student,
-                version: student.version || "v2", // 为旧数据添加默认版本
-              }));
-              setStudentsList(students);
-              initializeStudentsInfo(students);
-            }
+          if (typeof data[0] === "string") {
+            // 旧格式：字符串数组
+            const students = createStudentsFromNames(data);
+            setStudentsList(students);
+            initializeStudentsInfo(students);
+          } else {
+            // 新格式：对象数组，但需要兼容没有version字段的情况
+            const students = (data as StudentBasicInfo[]).map((student) => ({
+              ...student,
+              version: student.version || "v2", // 为旧数据添加默认版本
+            }));
+            setStudentsList(students);
+            initializeStudentsInfo(students);
           }
         } catch (error) {
           console.error("Failed to parse students data:", error);
+          setStudentsList([]);
+          setStudentsInfo({});
         }
       }
     },

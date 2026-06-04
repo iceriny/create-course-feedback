@@ -4,6 +4,7 @@ import {
   Flex,
   Input,
   Select,
+  Space,
   Tooltip,
   Typography,
   theme,
@@ -104,6 +105,40 @@ const SettingsDrawer = memo(
     const [customModelListUrl, setCustomModelListUrl] = useState<string>(
       API.getCustomProviderConfig().modelListUrl,
     );
+    const compactLabelStyle: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      height: token.controlHeight,
+      padding: `0 ${token.paddingSM}px`,
+      color: token.colorText,
+      background: token.colorFillAlter,
+      border: `${token.lineWidth}px ${token.lineType} ${token.colorBorder}`,
+      borderRight: 0,
+      borderRadius: `${token.borderRadius}px 0 0 ${token.borderRadius}px`,
+      whiteSpace: "nowrap",
+    };
+    const compactInputStyle: React.CSSProperties = {
+      flex: 1,
+      minWidth: 0,
+      borderTopLeftRadius: 0,
+      borderBottomLeftRadius: 0,
+    };
+    const compactMiddleInputStyle: React.CSSProperties = {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 0,
+    };
+    const compactActionStyle: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: token.marginLG,
+      height: token.controlHeight,
+      padding: `0 ${token.paddingSM}px`,
+      background: token.colorFillAlter,
+      border: `${token.lineWidth}px ${token.lineType} ${token.colorBorder}`,
+      borderLeft: 0,
+      borderRadius: `0 ${token.borderRadius}px ${token.borderRadius}px 0`,
+    };
     useEffect(() => {
       const promptKey = localStorage.getItem("promptKey") as PromptType | null;
       if (promptKey) {
@@ -250,29 +285,38 @@ const SettingsDrawer = memo(
               <Typography.Text type="secondary">
                 可配置兼容OpenAI格式的API服务，例如本地部署的LLM、私有云等
               </Typography.Text>
-              <Input
-                addonBefore="API基础URL"
-                placeholder="https://your-api-endpoint.com"
-                value={customApiUrl.split("/v1/chat/completions")[0]}
-                onChange={(e) => {
-                  const baseUrl = e.target.value.trim();
-                  // 自动补全完整的API URL
-                  setCustomApiUrl(`${baseUrl}/v1/chat/completions`);
-                  setCustomModelListUrl(`${baseUrl}/v1/models`);
-                }}
-              />
-              <Input
-                addonBefore="聊天完成URL"
-                placeholder="https://your-api-endpoint.com/v1/chat/completions"
-                value={customApiUrl}
-                onChange={(e) => setCustomApiUrl(e.target.value)}
-              />
-              <Input
-                addonBefore="模型列表URL"
-                placeholder="https://your-api-endpoint.com/v1/models"
-                value={customModelListUrl}
-                onChange={(e) => setCustomModelListUrl(e.target.value)}
-              />
+              <Space.Compact style={{ width: "100%" }}>
+                <span style={compactLabelStyle}>API基础URL</span>
+                <Input
+                  style={compactInputStyle}
+                  placeholder="https://your-api-endpoint.com"
+                  value={customApiUrl.split("/v1/chat/completions")[0]}
+                  onChange={(e) => {
+                    const baseUrl = e.target.value.trim();
+                    // 自动补全完整的API URL
+                    setCustomApiUrl(`${baseUrl}/v1/chat/completions`);
+                    setCustomModelListUrl(`${baseUrl}/v1/models`);
+                  }}
+                />
+              </Space.Compact>
+              <Space.Compact style={{ width: "100%" }}>
+                <span style={compactLabelStyle}>聊天完成URL</span>
+                <Input
+                  style={compactInputStyle}
+                  placeholder="https://your-api-endpoint.com/v1/chat/completions"
+                  value={customApiUrl}
+                  onChange={(e) => setCustomApiUrl(e.target.value)}
+                />
+              </Space.Compact>
+              <Space.Compact style={{ width: "100%" }}>
+                <span style={compactLabelStyle}>模型列表URL</span>
+                <Input
+                  style={compactInputStyle}
+                  placeholder="https://your-api-endpoint.com/v1/models"
+                  value={customModelListUrl}
+                  onChange={(e) => setCustomModelListUrl(e.target.value)}
+                />
+              </Space.Compact>
               <Button type="primary" onClick={handleCustomConfigChange}>
                 保存配置
               </Button>
@@ -314,16 +358,19 @@ const SettingsDrawer = memo(
             </Typography.Text>
           )}
           {/* API Key输入框 */}
-          <Input
-            addonBefore="请输入API Key"
-            placeholder={API.tokenReady() ? API.getMackToken() : "请输入"}
-            onChange={(event) => {
-              const api_key = event.target.value.trim();
-              API.setToken(api_key);
-              localStorage.setItem("api_key", api_key);
-              sendMessage("API Key设置成功, 请刷新页面加载可用模型.");
-            }}
-          />
+          <Space.Compact style={{ width: "100%" }}>
+            <span style={compactLabelStyle}>请输入API Key</span>
+            <Input
+              style={compactInputStyle}
+              placeholder={API.tokenReady() ? API.getMackToken() : "请输入"}
+              onChange={(event) => {
+                const api_key = event.target.value.trim();
+                API.setToken(api_key);
+                localStorage.setItem("api_key", api_key);
+                sendMessage("API Key设置成功, 请刷新页面加载可用模型.");
+              }}
+            />
+          </Space.Compact>
           {/* 提示词自定义输入框 */}
           <Flex vertical gap={5} justify="space-between">
             <Flex align="center" justify="space-between">
@@ -366,10 +413,25 @@ const SettingsDrawer = memo(
               </Tooltip>
             </Flex>
             {/* 自定义提示词名称 */}
-            <Input
-              addonBefore="名称"
-              addonAfter={
-                <Flex gap={20}>
+            <Space.Compact style={{ width: "100%" }}>
+              <span style={compactLabelStyle}>名称</span>
+              <Input
+                style={compactMiddleInputStyle}
+                value={promptItems[promptKey].name}
+                disabled={promptKey in PROMPTS}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const old_items = {
+                    ...promptItems,
+                    [promptKey]: {
+                      ...promptItems[promptKey],
+                      name: value,
+                    },
+                  };
+                  setPromptItems(old_items);
+                }}
+              />
+              <span style={compactActionStyle}>
                   <CloseOutlined
                     style={{
                       fontSize: token.controlHeightXS,
@@ -394,22 +456,8 @@ const SettingsDrawer = memo(
                       savePromptToLocalStorage(promptItems);
                     }}
                   />
-                </Flex>
-              }
-              value={promptItems[promptKey].name}
-              disabled={promptKey in PROMPTS}
-              onChange={(event) => {
-                const value = event.target.value;
-                const old_items = {
-                  ...promptItems,
-                  [promptKey]: {
-                    ...promptItems[promptKey],
-                    name: value,
-                  },
-                };
-                setPromptItems(old_items);
-              }}
-            />
+              </span>
+            </Space.Compact>
             {/* 提示词内容 */}
             <Input.TextArea
               disabled={promptKey in PROMPTS}

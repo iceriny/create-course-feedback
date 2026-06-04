@@ -1,4 +1,4 @@
-import { Checkbox, Input } from "antd";
+import { Checkbox, Input, Space, theme } from "antd";
 import type { InputProps as InputStringProps } from "antd";
 
 export interface SingleNumberInputProps {
@@ -25,6 +25,7 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
   onClick,
   onActive,
 }) => {
+  const { token } = theme.useToken();
   const handleChange: InputStringProps["onChange"] = (value) => {
     const newValue = value.target.value;
     onChange?.(newValue, index);
@@ -49,39 +50,57 @@ const SingleNumberInput: React.FC<SingleNumberInputProps> = ({
       onBackspace?.(index);
     }
   };
+  const inputWidth = `${
+    8 + (value === undefined ? 1 : value.toString().length - 1)
+  }em`;
+
   return (
-    <Input
-      id={id}
-      defaultValue={defaultValue}
-      value={value}
-      addonBefore={
-        <div
-          onClick={() => {
-            onClick?.(index, value);
+    <Space.Compact size="small" style={{ width: inputWidth }}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          height: token.controlHeightSM,
+          padding: `0 ${token.paddingXS}px`,
+          color: token.colorText,
+          background: token.colorFillAlter,
+          border: `${token.lineWidth}px ${token.lineType} ${token.colorBorder}`,
+          borderRight: 0,
+          borderRadius: `${token.borderRadiusSM}px 0 0 ${token.borderRadiusSM}px`,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+        onClick={() => {
+          onClick?.(index, value);
+        }}
+      >
+        <Checkbox
+          style={{ paddingRight: "0.5em" }}
+          checked={activated}
+          onChange={() => {
+            onActive?.(index);
           }}
-        >
-          <Checkbox
-            style={{ paddingRight: "0.5em" }}
-            checked={activated}
-            onChange={() => {
-              onActive?.(index);
-            }}
-          />
-          {index + 1}
-        </div>
-      }
-      type="text"
-      size="small"
-      placeholder="学生姓名"
-      style={{
-        width: `${
-          8 + (value === undefined ? 1 : value.toString().length - 1)
-        }em`,
-      }}
-      onChange={handleChange}
-      onPressEnter={handlePressEnter}
-      onKeyDown={handleBackspace}
-    />
+        />
+        {index + 1}
+      </span>
+      <Input
+        id={id}
+        defaultValue={defaultValue}
+        value={value}
+        type="text"
+        size="small"
+        placeholder="学生姓名"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+        }}
+        onChange={handleChange}
+        onPressEnter={handlePressEnter}
+        onKeyDown={handleBackspace}
+      />
+    </Space.Compact>
   );
 };
 

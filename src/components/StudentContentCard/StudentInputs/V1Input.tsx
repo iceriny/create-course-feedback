@@ -1,7 +1,7 @@
 import React, { memo, useState, useCallback, useMemo } from "react";
 import { AutoComplete, Form } from "antd";
-import { V1InputSuggestionManager } from "../../../utils/inputAssistant";
 import { useKeyboardNavigation } from "../../../hooks";
+import { useInputAssistantStore } from "../../../store/InputAssistantStore";
 import type { JointContent } from "antd/es/message/interface";
 
 interface V1InputProps {
@@ -18,6 +18,14 @@ interface V1InputProps {
 const V1Input = memo(({ index, className, disabled, totalStudents, sendWarning }: V1InputProps) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
+  // 使用 zustand store
+  const searchV1Suggestions = useInputAssistantStore(
+    (state) => state.searchV1Suggestions,
+  );
+  const addV1Suggestion = useInputAssistantStore(
+    (state) => state.addV1Suggestion,
+  );
+
   // 键盘导航
   const { handleEnterKey, handleBackspaceKey } = useKeyboardNavigation({
     currentIndex: index,
@@ -30,16 +38,16 @@ const V1Input = memo(({ index, className, disabled, totalStudents, sendWarning }
   const handleInputChange = useCallback((value: string) => {
     if (!className) return;
 
-    const newSuggestions = V1InputSuggestionManager.searchSuggestions(className, value);
+    const newSuggestions = searchV1Suggestions(className, value);
     setSuggestions(newSuggestions);
-  }, [className]);
+  }, [className, searchV1Suggestions]);
 
   // 处理输入确认，保存到建议库
-  const handleInputBlur = useCallback((value: string) => {
+  const handleInputBlur = useCallback(async (value: string) => {
     if (!className || !value.trim()) return;
 
-    V1InputSuggestionManager.addSuggestion(className, value.trim());
-  }, [className]);
+    await addV1Suggestion(className, value.trim());
+  }, [className, addV1Suggestion]);
 
   // 键盘事件处理
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {

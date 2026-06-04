@@ -1,6 +1,6 @@
-import { Button, Modal, List } from "antd";
+import { Button, Modal, Typography } from "antd";
 import { RightOutlined } from "@ant-design/icons";
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 
 import Version from "./Version";
 
@@ -14,7 +14,7 @@ interface VersionInfo {
 type VersionData = VersionInfo[];
 
 const UpdateInfo: FC = () => {
-  const version = Version.getInstance();
+  const version = useMemo(() => Version.getInstance(), []);
   const [versionInfo, setVersionInfo] = useState<VersionData>([]);
   const [versionOpen, setVersionOpen] = useState(false);
 
@@ -29,7 +29,7 @@ const UpdateInfo: FC = () => {
     };
 
     checkVersion();
-  }, []); // 移除依赖项，仅在组件挂载时执行一次
+  }, [version]);
 
   const handleOk = () => {
     // if (versionInfo?.downloadUrl) {
@@ -51,15 +51,13 @@ const UpdateInfo: FC = () => {
       ]}
     >
       {versionOpen && (
-        <List
-          itemLayout="vertical"
-          dataSource={versionInfo}
-          renderItem={(item: VersionInfo) => (
-            <List.Item>
-              <List.Item.Meta
-                title={item.version}
-                description={`更新日期: ${item.date}`}
-              />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {versionInfo.map((item: VersionInfo) => (
+            <section key={item.version}>
+              <Typography.Title level={4}>{item.version}</Typography.Title>
+              <Typography.Text type="secondary">
+                更新日期: {item.date}
+              </Typography.Text>
               <div className="version-content">
                 {item.content.split("\n").map((line, index) => (
                   <p key={index}>
@@ -74,9 +72,9 @@ const UpdateInfo: FC = () => {
                   </p>
                 ))}
               </div>
-            </List.Item>
-          )}
-        />
+            </section>
+          ))}
+        </div>
       )}
     </Modal>
   );

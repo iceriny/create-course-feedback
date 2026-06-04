@@ -235,11 +235,25 @@ class API {
     )}`;
   }
 
-  private setMessageBody() {
-    if (!this.option || !this.messages) return;
-    this.option.headers.Authorization = `Bearer ${API.token}`;
-    this.option.body = JSON.stringify(this.messages);
-    console.log("API.option.body", this.option.body);
+  private buildMessageBody(message: Message[]): MessageBody | null {
+    if (!this.messages) return null;
+
+    return {
+      ...this.messages,
+      model: API.model,
+      messages: message,
+    };
+  }
+
+  private buildRequestOption(messageBody: MessageBody): Option {
+    return {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(messageBody),
+    };
   }
 
   // 获取当前供应商配置
@@ -484,11 +498,6 @@ class API {
     callback?: (content: string | null, type?: ContentType) => void,
     onFinish?: () => void,
   ) {
-    if (!this.messages || !this.option) return;
-    console.log("sendMessage", message);
-    this.messages.messages = this.messages.messages.concat(message);
-    this.setMessageBody();
-
     const providerConfig = API.getCurrentProviderConfig();
 
     // 获取当前提供商类型
@@ -499,7 +508,11 @@ class API {
       return this._sendGeminiMessage(message, callback, onFinish);
     }
 
-    const response = await fetch(providerConfig.apiUrl, this.option);
+    const messageBody = this.buildMessageBody(message);
+    if (!messageBody) return;
+    const option = this.buildRequestOption(messageBody);
+
+    const response = await fetch(providerConfig.apiUrl, option);
     const reader = response.body?.getReader();
     if (!reader) {
       console.error("Failed to get reader");
@@ -508,7 +521,6 @@ class API {
     const decoder = new TextDecoder("utf-8");
     let content = "";
     let reasoning_content = "";
-    console.log("Started streaming response");
     let null_count = 0;
     while (true) {
       const { done, value } = await reader.read();

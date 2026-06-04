@@ -12,12 +12,7 @@ const packageJson = JSON.parse(
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      // 减少 babel 插件以提升构建速度
-      babel: {
-        plugins: [],
-      },
-    }),
+    react(),
     svgr({ svgrOptions: { icon: true } }),
     // 只在构建时启用 visualizer
     ...(process.env.NODE_ENV === "production"
@@ -51,7 +46,6 @@ export default defineConfig({
       "uuid",
       "@ant-design/icons",
     ],
-    exclude: ["@ant-design/v5-patch-for-react-19"],
   },
   build: {
     // 构建性能优化

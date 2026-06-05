@@ -1,10 +1,14 @@
-import API from "../../AI_API/API";
-import type { ContentType, Message } from "../../AI_API/API";
+import type { ContentType } from "../../AI_API/API";
 import type { StudentBasicInfo, StudentsInfo } from "../../components/types";
 import { formatStructuredStudentPerformance } from "../../domain/student";
 import { cleanGeneratedFeedback } from "../feedback/feedbackTemplate";
 import { buildStudentGenerationMessages } from "../prompt/promptCompiler";
-import { buildPromptTrace } from "./promptTrace";
+import { type AIClient, ProviderAIClient } from "./AIClient";
+import {
+  createGenerationOrchestrator,
+  type GenerationOrchestrator,
+} from "./generationOrchestrator";
+import { planStudentGenerationContext } from "./contextPlanner";
 import { validateGeneratedFeedback } from "./outputValidator";
 
 export interface StudentPerformanceFormReader {
@@ -47,12 +51,18 @@ export const getStudentPerformanceText = (
 };
 
 export interface StudentFeedbackGenerationInput {
-  api?: Pick<API, "sendMessage">;
+  aiClient?: AIClient;
   blockedStudentNames: string[];
   coursePromptContext: string;
   form: StudentPerformanceFormReader;
   index: number;
+  orchestrator?: Pick<GenerationOrchestrator, "queueStudentGeneration">;
+  promptRecipe?: {
+    id: string;
+    name: string;
+  };
   student: StudentBasicInfo;
+  students?: StudentBasicInfo[];
   systemPrompt: string;
   updateStudentInfo: StudentInfoUpdater;
 }
@@ -140,44 +150,45 @@ export const createStudentFeedbackStreamHandlers = (
 };
 
 export const startStudentFeedbackGeneration = ({
-  api = new API(),
+  aiClient = new ProviderAIClient(),
   blockedStudentNames,
   coursePromptContext,
   form,
   index,
+  orchestrator,
+  promptRecipe,
   student,
+  students,
   systemPrompt,
   updateStudentInfo,
 }: StudentFeedbackGenerationInput) => {
-  const messages: Message[] = buildStudentFeedbackGenerationMessages({
+  const contextPlan = planStudentGenerationContext({
     coursePromptContext,
-    form,
-    index,
+    performanceText: getStudentPerformanceText(form, student, index),
     student,
+    students:
+      students ??
+      [
+        student,
+        ...blockedStudentNames.map((name) => ({
+          gender: "male" as const,
+          name,
+          version: student.version,
+        })),
+      ],
+  });
+
+  const generationOrchestrator =
+    orchestrator ??
+    createGenerationOrchestrator({
+      aiClient,
+      promptRecipe,
+      updateStudentInfo,
+    });
+
+  return generationOrchestrator.queueStudentGeneration({
+    contextPlan,
+    index,
     systemPrompt,
   });
-  const trace = buildPromptTrace({
-    blockedStudentNames,
-    coursePromptContext,
-    messages,
-    studentName: student.name,
-  });
-
-  updateStudentInfo(index, {
-    generation: {
-      startedAt: trace.createdAt,
-      status: "generating",
-      trace,
-    },
-    loading: true,
-  });
-
-  const { onContent, onFinish } = createStudentFeedbackStreamHandlers(
-    index,
-    student,
-    blockedStudentNames,
-    updateStudentInfo,
-  );
-
-  api.sendMessage(onContent, onFinish, ...messages);
 };

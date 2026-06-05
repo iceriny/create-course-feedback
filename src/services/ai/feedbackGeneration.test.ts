@@ -13,6 +13,9 @@ const makeForm = (values: Record<string, unknown>) => ({
   getFieldValue: (name: (string | number)[]) => values[name.join(".")],
 });
 
+const waitForMicrotasks = () =>
+  new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+
 const baseInfo: StudentsInfo = {
   name: "张三",
   content: "",
@@ -130,12 +133,17 @@ describe("feedback generation service", () => {
     });
   });
 
-  it("starts API generation with loading state and compiled messages", () => {
-    const sendMessage = vi.fn();
+  it("starts API generation with loading state and compiled messages", async () => {
+    const sendMessages = vi.fn();
     const updateStudentInfo = vi.fn();
 
     startStudentFeedbackGeneration({
-      api: { sendMessage },
+      aiClient: {
+        getModel: () => "test-model",
+        getProvider: () => "siliconflow",
+        isTokenReady: () => true,
+        sendMessages,
+      },
       blockedStudentNames: ["李四"],
       coursePromptContext: "课程信息",
       form: makeForm({ "content.0": "表现积极" }),
@@ -145,32 +153,29 @@ describe("feedback generation service", () => {
       updateStudentInfo,
     });
 
+    await waitForMicrotasks();
+
     expect(updateStudentInfo).toHaveBeenCalledWith(0, {
+      content: "",
       generation: {
-        startedAt: expect.any(String),
-        status: "generating",
-        trace: expect.objectContaining({
-          contextPolicy: expect.objectContaining({
-            allowedStudentName: "张三",
-            blockedStudentNames: ["李四"],
-          }),
-          messages: [
-            { role: "system", content: "写反馈" },
-            { role: "user", content: "课程信息" },
-            { role: "user", content: "学员姓名: 张三" },
-            { role: "user", content: "表现积极" },
-          ],
-        }),
+        attempt: 0,
+        maxAttempts: 2,
+        queuedAt: expect.any(String),
+        status: "queued",
+        taskId: expect.any(String),
       },
       loading: true,
+      think_content: "",
     });
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      { role: "system", content: "写反馈" },
-      { role: "user", content: "课程信息" },
-      { role: "user", content: "学员姓名: 张三" },
-      { role: "user", content: "表现积极" },
+    expect(sendMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: "system", content: "写反馈" },
+          { role: "user", content: "课程信息" },
+          { role: "user", content: "学员姓名: 张三" },
+          { role: "user", content: "表现积极" },
+        ],
+      }),
     );
   });
 });

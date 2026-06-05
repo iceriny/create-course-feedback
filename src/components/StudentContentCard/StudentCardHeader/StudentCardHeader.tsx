@@ -28,8 +28,14 @@ const VERSION_OPTIONS = [
 
 const getGenerationStatusTag = (studentInfo: StudentsInfo) => {
   const status = studentInfo.generation?.status;
+  if (status === "queued") {
+    return <Tag color="default">排队中</Tag>;
+  }
   if (studentInfo.loading || status === "generating") {
     return <Tag color="processing">生成中</Tag>;
+  }
+  if (status === "retrying") {
+    return <Tag color="warning">重试中</Tag>;
   }
   if (status === "failed") {
     return <Tag color="error">生成失败</Tag>;

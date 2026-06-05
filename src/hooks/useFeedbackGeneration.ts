@@ -1,13 +1,20 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { JointContent } from "antd/es/message/interface";
 import type { FormInstance } from "antd/es/form";
 
 import { API } from "../AI_API";
-import type { StudentBasicInfo, StudentsInfo } from "../components/types";
+import type {
+  PromptItem,
+  PromptType,
+  StudentBasicInfo,
+  StudentsInfo,
+} from "../components/types";
 import {
   startStudentFeedbackGeneration,
   type StudentInfoUpdater,
 } from "../services/ai/feedbackGeneration";
+import { createGenerationOrchestrator } from "../services/ai/generationOrchestrator";
+import { useAIStore } from "../store/aiStore";
 
 interface UseFeedbackGenerationParams {
   contentForm: FormInstance;
@@ -15,6 +22,8 @@ interface UseFeedbackGenerationParams {
   getCoursePromptContext: () => string | null;
   isCourseSavedRef: React.MutableRefObject<boolean>;
   prompt: string;
+  promptKey: PromptType;
+  promptItem: PromptItem;
   sendWarning: (
     content: JointContent,
     duration?: number | VoidFunction,
@@ -31,11 +40,34 @@ export const useFeedbackGeneration = ({
   getCoursePromptContext,
   isCourseSavedRef,
   prompt,
+  promptItem,
+  promptKey,
   sendWarning,
   studentsInfo,
   studentsList,
   updateStudentInfo,
 }: UseFeedbackGenerationParams) => {
+  const updateGenerationTask = useAIStore(
+    (state) => state.updateGenerationTask,
+  );
+  const promptRecipe = useMemo(
+    () => ({
+      id: promptKey,
+      name: promptItem.name,
+    }),
+    [promptItem.name, promptKey],
+  );
+
+  const orchestrator = useMemo(
+    () =>
+      createGenerationOrchestrator({
+        onTaskChange: updateGenerationTask,
+        promptRecipe,
+        updateStudentInfo,
+      }),
+    [promptRecipe, updateGenerationTask, updateStudentInfo],
+  );
+
   const generateSingleFeedback = useCallback(
     (index: number) => {
       const coursePromptContext = getCoursePromptContext();
@@ -58,7 +90,10 @@ export const useFeedbackGeneration = ({
         coursePromptContext,
         form: contentForm,
         index,
+        orchestrator,
+        promptRecipe,
         student,
+        students: studentsList,
         systemPrompt: prompt,
         updateStudentInfo,
       });
@@ -68,7 +103,9 @@ export const useFeedbackGeneration = ({
       ensureCourseSaved,
       getCoursePromptContext,
       isCourseSavedRef,
+      orchestrator,
       prompt,
+      promptRecipe,
       sendWarning,
       studentsList,
       updateStudentInfo,

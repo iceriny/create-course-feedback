@@ -16,6 +16,16 @@ const StudentCollapseContent = memo(
   ({ index, studentInfo, copyToClipboard }: StudentCollapseContentProps) => {
     const quality = studentInfo.generation?.quality;
     const errorMessage = studentInfo.generation?.errorMessage;
+    const attempt = studentInfo.generation?.attempt;
+    const maxAttempts = studentInfo.generation?.maxAttempts;
+    const showRetryHint =
+      studentInfo.generation?.status === "retrying" &&
+      attempt !== undefined &&
+      maxAttempts !== undefined;
+    const retryTitle =
+      showRetryHint && attempt < maxAttempts
+        ? `准备第 ${attempt + 1} 次尝试`
+        : "正在重试";
 
     // 优化折叠面板配置，避免每次重新创建
     const collapseItems = useMemo(
@@ -65,6 +75,13 @@ const StudentCollapseContent = memo(
               {errorMessage && (
                 <Alert showIcon type="error" title={errorMessage} />
               )}
+              {showRetryHint && (
+                <Alert
+                  showIcon
+                  type="warning"
+                  title={retryTitle}
+                />
+              )}
               {quality && (
                 <Alert
                   showIcon
@@ -88,7 +105,15 @@ const StudentCollapseContent = memo(
           ),
         },
       ],
-      [errorMessage, index, quality, studentInfo, copyToClipboard],
+      [
+        errorMessage,
+        index,
+        quality,
+        retryTitle,
+        showRetryHint,
+        studentInfo,
+        copyToClipboard,
+      ],
     );
 
     // 默认展开内容面板

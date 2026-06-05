@@ -512,58 +512,66 @@ class API {
     if (!messageBody) return;
     const option = this.buildRequestOption(messageBody);
 
-    const response = await fetch(providerConfig.apiUrl, option);
-    const reader = response.body?.getReader();
-    if (!reader) {
-      console.error("Failed to get reader");
-      return;
-    }
-    const decoder = new TextDecoder("utf-8");
-    let content = "";
-    let reasoning_content = "";
-    let null_count = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done || null_count > 5) {
+    try {
+      const response = await fetch(providerConfig.apiUrl, option);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        console.error("Failed to get reader");
+        callback?.(null);
         onFinish?.();
-        break;
+        return;
       }
+      const decoder = new TextDecoder("utf-8");
+      let content = "";
+      let reasoning_content = "";
+      let null_count = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || null_count > 5) {
+          onFinish?.();
+          break;
+        }
 
-      // 解码二进制数据为文本
-      const chunkText = decoder.decode(value, { stream: true });
+        // 解码二进制数据为文本
+        const chunkText = decoder.decode(value, { stream: true });
 
-      // 处理逻辑（如拼接 JSON 或实时显示）
-      const last = chunkText.split("\n");
-      for (const chunk of last) {
-        if (chunk.startsWith("data: ")) {
-          const data = chunk.slice(6);
-          if (data === "[DONE]") {
-            break;
-          }
-          try {
-            const jsonData = JSON.parse(data);
-            const this_reasoning_content =
-              jsonData.choices[0].delta.reasoning_content;
-            if (this_reasoning_content) {
-              reasoning_content += this_reasoning_content;
-              callback?.(reasoning_content, "reasoning_content");
+        // 处理逻辑（如拼接 JSON 或实时显示）
+        const last = chunkText.split("\n");
+        for (const chunk of last) {
+          if (chunk.startsWith("data: ")) {
+            const data = chunk.slice(6);
+            if (data === "[DONE]") {
+              break;
             }
-            const this_content = jsonData.choices[0].delta.content;
-            if (this_content) {
-              content += this_content;
-              callback?.(content, "content");
-            }
+            try {
+              const jsonData = JSON.parse(data);
+              const this_reasoning_content =
+                jsonData.choices[0].delta.reasoning_content;
+              if (this_reasoning_content) {
+                reasoning_content += this_reasoning_content;
+                callback?.(reasoning_content, "reasoning_content");
+              }
+              const this_content = jsonData.choices[0].delta.content;
+              if (this_content) {
+                content += this_content;
+                callback?.(content, "content");
+              }
 
-            if (this_reasoning_content === null && this_content === null) {
-              null_count++;
+              if (this_reasoning_content === null && this_content === null) {
+                null_count++;
+              }
+            } catch (error) {
+              console.error("Failed to parse JSON:", last);
+              console.error(error);
+              callback?.(null);
             }
-          } catch (error) {
-            console.error("Failed to parse JSON:", last);
-            console.error(error);
-            callback?.(null);
           }
         }
       }
+    } catch (error) {
+      console.error("Error calling API:", error);
+      callback?.(null);
+      onFinish?.();
     }
   }
 

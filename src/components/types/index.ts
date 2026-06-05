@@ -1,4 +1,5 @@
 import type { JointContent } from "antd/es/message/interface";
+import type { FeedbackGenerationState } from "../../domain/ai";
 
 // 学生基础信息接口 (静态信息)
 export interface StudentBasicInfo {
@@ -14,6 +15,7 @@ export interface StudentsInfo {
   think_content: string;
   loading: boolean;
   activated: boolean;
+  generation?: FeedbackGenerationState;
 }
 
 // 班级时间接口
@@ -36,12 +38,15 @@ export interface HistorysType {
   [key: string]: HistoryType;
 }
 
-// 提示词类型
-export type PromptType =
+// 内置提示词类型
+export type BuiltInPromptType =
   | "programming"
   | "programming_v2"
   | "robot"
   | "robot_v2";
+
+// 当前选中的提示词可以是内置模板，也可以是用户创建的模板
+export type PromptType = BuiltInPromptType | (string & {});
 
 // 提示词项接口
 export interface PromptItem {
@@ -49,7 +54,7 @@ export interface PromptItem {
   prompt: string;
 }
 
-export type PromptItems = Record<PromptType, PromptItem>;
+export type PromptItems = Record<BuiltInPromptType, PromptItem>;
 
 // 模板编辑器组件属性接口
 export interface TemplateEditorProps {

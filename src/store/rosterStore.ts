@@ -1,9 +1,13 @@
+import {
+  isLessonDraft,
+  type LessonCourse,
+  type LessonDraft,
+} from "../domain/lesson";
 import { create } from "zustand";
 
-import type { StudentBasicInfo, StudentsInfo } from "../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../types";
 import {
   createStudentsInfo,
-  mergeStudentNamesWithExistingInfo,
   parseStudentNamesInput,
   sortStudentsAndInfoByName,
 } from "../domain/student";
@@ -16,7 +20,14 @@ type StudentInfoPatch =
   | Partial<StudentsInfo>
   | ((prev: StudentsInfo) => StudentsInfo);
 
-interface RosterStore {
+export type { LessonCourse, LessonDraft } from "../domain/lesson";
+interface RosterStore extends LessonDraft {
+  saveStatus: "saved" | "saving" | "error";
+  setCourse: (course: Partial<LessonCourse>) => void;
+  newLesson: () => void;
+  restoreLesson: (draft: LessonDraft) => void;
+  renameStudent: (index: number, name: string) => void;
+  removeStudent: (index: number) => void;
   studentsInfo: Record<number, StudentsInfo>;
   studentsList: StudentBasicInfo[];
   clearAllStudents: () => void;
@@ -42,13 +53,110 @@ interface RosterStore {
   updateStudentsFromRawValues: (rawValues: string[], className: string) => void;
 }
 
+const emptyCourse: LessonCourse = {
+  name: "",
+  start: "",
+  end: "",
+  contents: "",
+  objectives: "",
+};
+const identify = (students: StudentBasicInfo[]) =>
+  students.map((student) => ({
+    ...student,
+    id: student.id || crypto.randomUUID(),
+  }));
 const emptyRosterState = {
+  lessonId: "",
+  activeClass: "",
+  course: emptyCourse,
   studentsInfo: {},
   studentsList: [],
 };
 
 export const useRosterStore = create<RosterStore>((set, get) => ({
   ...emptyRosterState,
+  saveStatus: "saved",
+  setCourse: (course) =>
+    set((state) => ({
+      course: { ...state.course, ...course },
+      studentsInfo: Object.fromEntries(
+        Object.entries(state.studentsInfo).map(([key, info]) => [
+          key,
+          { ...info, confirmed: false, copiedAt: undefined },
+        ]),
+      ),
+    })),
+  newLesson: () => {
+    if (!flushLessonDraft()) return;
+    const state = get();
+    try {
+      localStorage.setItem(
+        `lessonArchive:${state.lessonId}`,
+        JSON.stringify(toDraft(state)),
+      );
+    } catch {
+      set({ saveStatus: "error" });
+      return;
+    }
+    set({
+      lessonId: crypto.randomUUID(),
+      course: { ...emptyCourse },
+      studentsInfo: createStudentsInfo(state.studentsList),
+    });
+  },
+  restoreLesson: (draft) => {
+    if (!isLessonDraft(draft)) {
+      set({ saveStatus: "error" });
+      return;
+    }
+    if (!flushLessonDraft()) return;
+    try {
+      const current = get();
+      if (current.lessonId)
+        localStorage.setItem(
+          `lessonArchive:${current.lessonId}`,
+          JSON.stringify(toDraft(current)),
+        );
+    } catch {
+      set({ saveStatus: "error" });
+      return;
+    }
+    set({
+      ...draft,
+      studentsList: identify(draft.studentsList),
+      studentsInfo: Object.fromEntries(
+        Object.entries(draft.studentsInfo).map(([key, info]) => [
+          key,
+          { ...info, loading: false, draftContent: undefined },
+        ]),
+      ),
+    });
+  },
+  renameStudent: (index, name) => {
+    if (!name.trim()) return;
+    set((state) => ({
+      studentsList: state.studentsList.map((s, i) =>
+        i === index ? { ...s, name: name.trim() } : s,
+      ),
+      studentsInfo: {
+        ...state.studentsInfo,
+        [index]: {
+          ...state.studentsInfo[index],
+          name: name.trim(),
+          confirmed: false,
+        },
+      },
+    }));
+  },
+  removeStudent: (index) =>
+    set((state) => ({
+      studentsList: state.studentsList.filter((_, i) => i !== index),
+      studentsInfo: Object.fromEntries(
+        state.studentsList.flatMap((_, i) =>
+          i === index ? [] : [[i > index ? i - 1 : i, state.studentsInfo[i]]],
+        ),
+      ),
+    })),
 
   clearAllStudents: () => {
     set(emptyRosterState);
@@ -69,15 +177,47 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
   },
 
   loadStudentsFromStorage: (className) => {
-    const students = readRosterStudents(className);
-    if (students.length === 0) {
-      set(emptyRosterState);
+    className = className.trim();
+    if (!className || className === get().activeClass) return;
+    if (!flushLessonDraft()) return;
+    let draft: LessonDraft | undefined;
+    try {
+      const raw = localStorage.getItem(`lessonDraft:${className}`);
+      if (raw) draft = JSON.parse(raw);
+      if (draft && !isLessonDraft(draft)) throw new Error("invalid draft");
+    } catch {
+      set({ saveStatus: "error" });
       return;
     }
-
+    const students = identify(
+      draft?.studentsList ?? readRosterStudents(className),
+    );
+    const infos = draft?.studentsInfo ?? createStudentsInfo(students);
     set({
-      studentsInfo: createStudentsInfo(students),
+      activeClass: className,
+      lessonId: draft?.lessonId || crypto.randomUUID(),
+      course: draft?.course ?? { ...emptyCourse },
       studentsList: students,
+      studentsInfo: Object.fromEntries(
+        students.map((student, index) => {
+          const info = infos[index] || createStudentsInfo([student])[0];
+          return [
+            index,
+            {
+              ...info,
+              draftContent: undefined,
+              loading: false,
+              generation: info.loading
+                ? {
+                    ...info.generation,
+                    status: "failed",
+                    errorMessage: "上次生成已中断，可以重新生成。",
+                  }
+                : info.generation,
+            },
+          ];
+        }),
+      ),
     });
   },
 
@@ -129,6 +269,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     if (!students[index]) return;
 
     students[index] = { ...students[index], gender };
+    get().updateStudentInfo(index, { confirmed: false, copiedAt: undefined });
     set({ studentsList: students });
     writeRosterStudents(className, students);
   },
@@ -157,6 +298,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     if (!students[index]) return;
 
     students[index] = { ...students[index], version };
+    get().updateStudentInfo(index, { confirmed: false, copiedAt: undefined });
     set({ studentsList: students });
     writeRosterStudents(className, students);
   },
@@ -167,15 +309,97 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     }
 
     const names = parseStudentNamesInput(rawValues);
-    const students = mergeStudentNamesWithExistingInfo(
-      names,
-      get().studentsList,
-    );
-
+    const previous = get();
+    const remaining = previous.studentsList.map((student, index) => ({
+      student,
+      info: previous.studentsInfo[index],
+    }));
+    const pairs = names.map((name) => {
+      const match = remaining.findIndex((item) => item.student.name === name);
+      if (match >= 0) return remaining.splice(match, 1)[0];
+      const student: StudentBasicInfo = {
+        id: crypto.randomUUID(),
+        name,
+        gender: "male",
+        version: "v2",
+      };
+      return { student, info: createStudentsInfo([student])[0] };
+    });
+    const students = identify(pairs.map((item) => item.student));
     set({
-      studentsInfo: createStudentsInfo(students),
+      activeClass: className,
+      lessonId: previous.lessonId || crypto.randomUUID(),
+      studentsInfo: Object.fromEntries(
+        pairs.map((item, index) => [index, item.info]),
+      ),
       studentsList: students,
     });
     writeRosterStudents(className, students);
   },
 }));
+
+const toDraft = (state: RosterStore): LessonDraft => ({
+  activeClass: state.activeClass,
+  lessonId: state.lessonId,
+  course: state.course,
+  studentsList: state.studentsList,
+  studentsInfo: Object.fromEntries(
+    Object.entries(state.studentsInfo).map(([key, info]) => [
+      key,
+      {
+        ...info,
+        draftContent: undefined,
+        think_content: "",
+        generation: info.generation
+          ? { ...info.generation, trace: undefined }
+          : undefined,
+      },
+    ]),
+  ),
+});
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+export function flushLessonDraft(): boolean {
+  clearTimeout(saveTimer);
+  const state = useRosterStore.getState();
+  if (!state.activeClass) return true;
+  try {
+    localStorage.setItem(
+      `lessonDraft:${state.activeClass}`,
+      JSON.stringify(toDraft(state)),
+    );
+    localStorage.setItem("lastActiveClass", state.activeClass);
+    writeRosterStudents(state.activeClass, state.studentsList);
+    const classes = JSON.parse(
+      localStorage.getItem("class-name") || "[]",
+    ) as string[];
+    if (!classes.includes(state.activeClass))
+      localStorage.setItem(
+        "class-name",
+        JSON.stringify([...classes, state.activeClass]),
+      );
+    useRosterStore.setState({ saveStatus: "saved" });
+    return true;
+  } catch {
+    useRosterStore.setState({ saveStatus: "error" });
+    return false;
+  }
+}
+useRosterStore.subscribe((state, previous) => {
+  if (
+    state.course === previous.course &&
+    state.studentsList === previous.studentsList &&
+    state.studentsInfo === previous.studentsInfo &&
+    state.lessonId === previous.lessonId
+  )
+    return;
+  if (!state.activeClass) return;
+  useRosterStore.setState({ saveStatus: "saving" });
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushLessonDraft, 300);
+});
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushLessonDraft);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushLessonDraft();
+  });
+}

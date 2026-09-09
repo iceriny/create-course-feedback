@@ -1,6 +1,7 @@
+import { RequestError } from "../../AI_API/API";
 import { v4 as uuidv4 } from "uuid";
 
-import type { StudentsInfo } from "../../components/types";
+import type { StudentsInfo } from "../../types";
 import type { GenerationTaskSnapshot, PromptTrace } from "../../domain/ai";
 import { cleanGeneratedFeedback } from "../feedback/feedbackTemplate";
 import { savePromptTrace } from "../persistence/promptTraceRepository";
@@ -30,6 +31,7 @@ export interface QueueStudentGenerationInput {
   contextPlan: StudentGenerationContextPlan;
   index: number;
   systemPrompt: string;
+  update?: (patch: Parameters<StudentInfoUpdater>[1]) => void;
 }
 
 interface GenerationTask {
@@ -43,14 +45,13 @@ interface GenerationTask {
   status: GenerationTaskSnapshot["status"];
   systemPrompt: string;
   trace?: PromptTrace;
+  controller: AbortController;
+  update?: (patch: Parameters<StudentInfoUpdater>[1]) => void;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_MAX_CONCURRENT_TASKS = 3;
 const DEFAULT_RETRY_DELAY_MS = 800;
-
-const getFailedMessage = (attempt: number, maxAttempts: number) =>
-  attempt < maxAttempts ? "生成失败，正在重试。" : "生成失败，请稍后重试。";
 
 const toSnapshot = (task: GenerationTask): GenerationTaskSnapshot => ({
   attempt: task.attempt,
@@ -77,6 +78,7 @@ export class GenerationOrchestrator {
   private readonly promptRecipe?: PromptTrace["promptRecipe"];
   private readonly retryDelayMs: number;
   private runningTasks = 0;
+  private readonly tasks = new Map<string, GenerationTask>();
   private readonly saveTrace: (trace: PromptTrace) => void;
   private readonly updateStudentInfo: StudentInfoUpdater;
 
@@ -104,7 +106,11 @@ export class GenerationOrchestrator {
     contextPlan,
     index,
     systemPrompt,
+    update,
   }: QueueStudentGenerationInput) {
+    const key = contextPlan.student.id || String(index);
+    const existing = this.tasks.get(key);
+    if (existing) return existing.id;
     const queuedAt = new Date().toISOString();
     const task: GenerationTask = {
       attempt: 0,
@@ -115,11 +121,15 @@ export class GenerationOrchestrator {
       queuedAt,
       status: "queued",
       systemPrompt,
+      update,
+      controller: new AbortController(),
     };
 
+    this.tasks.set(key, task);
     this.queue.push(task);
-    this.updateStudentInfo(index, {
-      content: "",
+    this.updateTask(task, {
+      confirmed: false,
+      draftContent: "",
       generation: {
         attempt: 0,
         maxAttempts: task.maxAttempts,
@@ -136,6 +146,36 @@ export class GenerationOrchestrator {
     return task.id;
   }
 
+  cancelAll() {
+    for (const task of this.tasks.values()) {
+      this.updateTask(task, {
+        loading: false,
+        draftContent: undefined,
+        generation: { status: "failed", errorMessage: "已取消生成。" },
+      });
+      task.controller.abort();
+    }
+    this.queue.length = 0;
+    this.tasks.clear();
+  }
+
+  private updateTask(
+    task: GenerationTask,
+    patch: Parameters<StudentInfoUpdater>[1],
+  ) {
+    if (task.controller.signal.aborted) return;
+    if (task.update) task.update(patch);
+    else this.updateStudentInfo(task.index, patch);
+  }
+
+  private storeTrace(trace: PromptTrace) {
+    try {
+      this.saveTrace(trace);
+    } catch {
+      /* 诊断记录不能中断反馈生成。 */
+    }
+  }
+
   private emitTask(task: GenerationTask) {
     this.onTaskChange?.(toSnapshot(task));
   }
@@ -150,6 +190,8 @@ export class GenerationOrchestrator {
 
       this.runningTasks += 1;
       void this.runTask(task).finally(() => {
+        const key = task.contextPlan.student.id || String(task.index);
+        if (this.tasks.get(key) === task) this.tasks.delete(key);
         this.runningTasks -= 1;
         void this.processQueue();
       });
@@ -157,6 +199,7 @@ export class GenerationOrchestrator {
   }
 
   private async runTask(task: GenerationTask): Promise<void> {
+    if (task.controller.signal.aborted) return;
     task.attempt += 1;
     task.startedAt = new Date().toISOString();
     task.status = task.attempt > 1 ? "retrying" : "running";
@@ -182,9 +225,9 @@ export class GenerationOrchestrator {
       },
       studentName: task.contextPlan.student.name,
     });
-    this.saveTrace(task.trace);
+    // 完成后统一保存诊断记录。
 
-    this.updateStudentInfo(task.index, (prevInfo) => ({
+    this.updateTask(task, (prevInfo) => ({
       ...prevInfo,
       generation: {
         ...prevInfo.generation,
@@ -223,6 +266,17 @@ export class GenerationOrchestrator {
       let content = "";
       let settled = false;
       let thinkContent = "";
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const flush = () => {
+        timer = undefined;
+        this.updateTask(task, {
+          draftContent: content,
+          think_content: thinkContent,
+        });
+      };
+      const schedule = () => {
+        timer ??= setTimeout(flush, 60);
+      };
 
       const settle = (
         result:
@@ -231,26 +285,31 @@ export class GenerationOrchestrator {
       ) => {
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
         resolve(result);
       };
 
+      task.controller.signal.addEventListener(
+        "abort",
+        () => settle({ ok: false, error: new RequestError("已取消生成。") }),
+        { once: true },
+      );
       try {
         const sendResult = this.aiClient.sendMessages({
           messages,
+          signal: task.controller.signal,
           onContent: (nextContent, type) => {
             if (settled) return;
 
             if (type === "content") {
               content = nextContent;
-              this.updateStudentInfo(task.index, { content });
+              schedule();
               return;
             }
 
             if (type === "reasoning_content") {
               thinkContent = nextContent;
-              this.updateStudentInfo(task.index, {
-                think_content: thinkContent,
-              });
+              schedule();
             }
           },
           onError: (error) => {
@@ -283,8 +342,13 @@ export class GenerationOrchestrator {
   }
 
   private async handleFailedAttempt(task: GenerationTask, error: Error) {
-    const errorMessage = getFailedMessage(task.attempt, task.maxAttempts);
-    const canRetry = task.attempt < task.maxAttempts;
+    if (task.controller.signal.aborted) return;
+    const canRetry =
+      task.attempt < task.maxAttempts &&
+      (!(error instanceof RequestError) || error.retryable);
+    const errorMessage = canRetry
+      ? `${error.message} 正在重试。`
+      : error.message;
     task.status = canRetry ? "retrying" : "failed";
 
     if (task.trace) {
@@ -293,10 +357,10 @@ export class GenerationOrchestrator {
         status: canRetry ? "retrying" : "failed",
         trace: task.trace,
       });
-      this.saveTrace(task.trace);
+      this.storeTrace(task.trace);
     }
 
-    this.updateStudentInfo(task.index, (prevInfo) => ({
+    this.updateTask(task, (prevInfo) => ({
       ...prevInfo,
       generation: {
         ...prevInfo.generation,
@@ -310,14 +374,27 @@ export class GenerationOrchestrator {
         trace: task.trace,
       },
       loading: canRetry,
+      draftContent: undefined,
     }));
     this.emitTask(task);
 
     if (!canRetry) return;
 
-    await new Promise((resolve) =>
-      globalThis.setTimeout(resolve, this.retryDelayMs),
-    );
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        task.controller.signal.removeEventListener("abort", done);
+        resolve();
+      };
+      const timer = setTimeout(
+        done,
+        Math.max(
+          this.retryDelayMs,
+          error instanceof RequestError ? error.retryAfterMs : 0,
+        ),
+      );
+      task.controller.signal.addEventListener("abort", done, { once: true });
+    });
     await this.runTask(task);
   }
 
@@ -328,8 +405,8 @@ export class GenerationOrchestrator {
   ) {
     task.status = "succeeded";
 
-    this.updateStudentInfo(task.index, (prevInfo) => {
-      const cleanedContent = cleanGeneratedFeedback(content || prevInfo.content);
+    this.updateTask(task, (prevInfo) => {
+      const cleanedContent = cleanGeneratedFeedback(content);
       const quality = validateGeneratedFeedback({
         allowedStudentName: task.contextPlan.student.name,
         blockedStudentNames: task.contextPlan.blockedStudentNames,
@@ -346,12 +423,16 @@ export class GenerationOrchestrator {
           thinkContent: thinkContent || prevInfo.think_content,
           trace: task.trace,
         });
-        this.saveTrace(task.trace);
+        this.storeTrace(task.trace);
       }
 
       return {
         ...prevInfo,
         content: cleanedContent,
+        previousContent: prevInfo.content || prevInfo.previousContent,
+        draftContent: undefined,
+        confirmed: false,
+        copiedAt: undefined,
         generation: {
           ...prevInfo.generation,
           attempt: task.attempt,

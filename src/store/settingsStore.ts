@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
 import API, { type ModelType } from "../AI_API/API";
-import { PROMPTS } from "../components/constants";
-import type { PromptItem, PromptType } from "../components/types";
+import { PROMPTS } from "../constants";
+import type { PromptItem, PromptType } from "../types";
 import {
   getPromptFromLocalStorage,
   savePromptToLocalStorage,

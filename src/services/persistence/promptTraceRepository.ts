@@ -8,9 +8,7 @@ import {
 export const PROMPT_TRACES_KEY = "promptTraces";
 export const DEFAULT_PROMPT_TRACE_LIMIT = 50;
 
-export const readPromptTraces = (
-  storage?: KeyValueStorage,
-): PromptTrace[] => {
+export const readPromptTraces = (storage?: KeyValueStorage): PromptTrace[] => {
   const traces = readStorageJson<unknown[]>(PROMPT_TRACES_KEY, [], storage);
   return traces.filter((trace): trace is PromptTrace =>
     Boolean(
@@ -41,5 +39,8 @@ export const savePromptTrace = (
     ...readPromptTraces(options.storage).filter((item) => item.id !== trace.id),
   ].slice(0, limit);
 
-  writeStorageJson(PROMPT_TRACES_KEY, traces, options.storage);
+  while (traces.length > 1 && JSON.stringify(traces).length > 250_000)
+    traces.pop();
+  if (JSON.stringify(traces).length <= 250_000)
+    writeStorageJson(PROMPT_TRACES_KEY, traces, options.storage);
 };

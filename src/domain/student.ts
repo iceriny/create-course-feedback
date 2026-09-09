@@ -1,4 +1,4 @@
-import type { StudentBasicInfo, StudentsInfo } from "../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../types";
 
 export interface StructuredStudentPerformance {
   total?: string;
@@ -59,6 +59,7 @@ export const normalizeStoredStudents = (data: unknown): StudentBasicInfo[] => {
         ),
     )
     .map((student) => ({
+      ...(typeof student.id === "string" ? { id: student.id } : {}),
       name: student.name.trim(),
       gender: student.gender === "female" ? "female" : "male",
       version: student.version === "v1" ? "v1" : "v2",
@@ -69,10 +70,10 @@ export const parseStudentNamesInput = (rawValues: string[]): string[] => {
   const values: string[] = [];
 
   for (const value of rawValues) {
-    const parts = value.includes(",") ? value.split(",") : [value];
+    const parts = value.split(/[,，、\n\r\t]+/);
     for (const part of parts) {
       const name = part.trim();
-      if (name && !values.includes(name)) {
+      if (name) {
         values.push(name);
       }
     }
@@ -127,10 +128,11 @@ export const sortStudentsAndInfoByName = (
     a.name.localeCompare(b.name),
   );
   const sortedInfo = Object.fromEntries(
-    Object.values(studentsInfo)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((info, index) => [index, info]),
-  ) as Record<number, StudentsInfo>;
+    sortedStudents.map((student, index) => [
+      index,
+      studentsInfo[students.indexOf(student)],
+    ]),
+  );
 
   return { sortedStudents, sortedInfo };
 };

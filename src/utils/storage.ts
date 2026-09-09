@@ -1,5 +1,5 @@
-import { PROMPTS } from "../components/constants";
-import { PromptItem } from "../components/types";
+import { PROMPTS } from "../constants";
+import { PromptItem } from "../types";
 import {
   readStorageJson,
   writeStorageJson,

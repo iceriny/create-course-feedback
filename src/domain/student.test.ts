@@ -8,7 +8,7 @@ import {
   parseStudentNamesInput,
   sortStudentsAndInfoByName,
 } from "./student";
-import type { StudentBasicInfo, StudentsInfo } from "../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../types";
 
 describe("student domain", () => {
   it("formats structured performance for prompt input", () => {
@@ -42,10 +42,11 @@ describe("student domain", () => {
     ]);
   });
 
-  it("parses comma separated names and preserves first occurrence order", () => {
+  it("parses names and preserves distinct students with the same name", () => {
     expect(parseStudentNamesInput(["张三, 李四", "张三", " 王五 "])).toEqual([
       "张三",
       "李四",
+      "张三",
       "王五",
     ]);
   });

@@ -20,7 +20,7 @@ describe("roster store", () => {
       activated: false,
     });
 
-    expect(useRosterStore.getState().studentsList).toEqual([
+    expect(useRosterStore.getState().studentsList).toMatchObject([
       { name: "李四", gender: "male", version: "v2" },
       { name: "张三", gender: "female", version: "v2" },
     ]);
@@ -29,7 +29,9 @@ describe("roster store", () => {
       content: "反馈草稿",
       name: "李四",
     });
-    expect(JSON.parse(localStorage.getItem("cpp0608_std") ?? "[]")).toEqual([
+    expect(
+      JSON.parse(localStorage.getItem("cpp0608_std") ?? "[]"),
+    ).toMatchObject([
       { name: "李四", gender: "male", version: "v2" },
       { name: "张三", gender: "female", version: "v2" },
     ]);

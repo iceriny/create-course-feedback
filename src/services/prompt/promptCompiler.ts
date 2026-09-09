@@ -1,6 +1,6 @@
 import type { Message } from "../../AI_API/API";
 import type { CourseTemplateContext } from "../../domain/course";
-import type { StudentBasicInfo } from "../../components/types";
+import type { StudentBasicInfo } from "../../types";
 import { replaceTemplate } from "../../utils";
 
 export const AI_COURSE_CONTEXT_TEMPLATE = `**课程名称:** {{courseName}}

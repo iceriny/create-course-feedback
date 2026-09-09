@@ -1,5 +1,5 @@
 import type { CourseTemplateContext } from "../../domain/course";
-import type { StudentBasicInfo, StudentsInfo } from "../../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../../types";
 import { replaceTemplate } from "../../utils";
 
 export const DEFAULT_FEEDBACK_TEMPLATE = `**课程名称:** {{courseName}}
@@ -53,6 +53,7 @@ export interface FeedbackBatchExportInput {
   students: StudentBasicInfo[];
   studentsInfo: Record<number, StudentsInfo>;
   onlyReadyAndActivated?: boolean;
+  onlyConfirmed?: boolean;
 }
 
 export const buildFeedbackBatchMarkdown = ({
@@ -62,17 +63,23 @@ export const buildFeedbackBatchMarkdown = ({
   students,
   studentsInfo,
   onlyReadyAndActivated = false,
+  onlyConfirmed = false,
 }: FeedbackBatchExportInput) => {
   return students
     .map((student, index) => {
       const studentInfo = studentsInfo[index];
       if (
         onlyReadyAndActivated &&
-        (!studentInfo?.content || !studentInfo.activated)
+        (!studentInfo?.content?.trim() ||
+          !studentInfo.activated ||
+          studentInfo.loading ||
+          studentInfo.generation?.status === "failed" ||
+          studentInfo.generation?.status === "queued")
       ) {
         return null;
       }
 
+      if (onlyConfirmed && !studentInfo?.confirmed) return null;
       return `${buildStudentFeedbackMarkdown({
         courseContext,
         customTemplate,
@@ -92,3 +99,11 @@ export const cleanGeneratedFeedback = (content: string) => {
     .replace(/哆啦人工智能小栈/, "")
     .trim();
 };
+
+export const toPlainText = (text: string) =>
+  text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^---$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();

@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import { describe, expect, it } from "vitest";
 
 import type { CourseTemplateContext } from "../../domain/course";
-import type { StudentBasicInfo, StudentsInfo } from "../../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../../types";
 import {
   buildFeedbackBatchMarkdown,
   buildStudentFeedbackMarkdown,
@@ -76,4 +76,24 @@ describe("feedback template service", () => {
       ),
     ).toBe("表现积极");
   });
+});
+
+it("excludes unfinished, failed, and unconfirmed drafts from confirmed export", () => {
+  for (const patch of [
+    { loading: true, confirmed: true },
+    { generation: { status: "failed" as const }, confirmed: true },
+    { confirmed: false },
+  ]) {
+    expect(
+      buildFeedbackBatchMarkdown({
+        courseContext,
+        customTemplate: "{{courseFeedback}}",
+        signature: "",
+        students: [students[0]],
+        studentsInfo: { 0: { ...studentsInfo[0], ...patch } },
+        onlyReadyAndActivated: true,
+        onlyConfirmed: true,
+      }),
+    ).toBe("");
+  }
 });

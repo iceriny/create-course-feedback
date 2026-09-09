@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { StudentsInfo } from "../../components/types";
+import type { StudentsInfo } from "../../types";
 import {
   buildStudentFeedbackGenerationMessages,
   createStudentFeedbackStreamHandlers,
@@ -156,7 +156,8 @@ describe("feedback generation service", () => {
     await waitForMicrotasks();
 
     expect(updateStudentInfo).toHaveBeenCalledWith(0, {
-      content: "",
+      confirmed: false,
+      draftContent: "",
       generation: {
         attempt: 0,
         maxAttempts: 2,

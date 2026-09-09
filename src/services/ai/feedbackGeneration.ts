@@ -1,5 +1,5 @@
 import type { ContentType } from "../../AI_API/API";
-import type { StudentBasicInfo, StudentsInfo } from "../../components/types";
+import type { StudentBasicInfo, StudentsInfo } from "../../types";
 import { formatStructuredStudentPerformance } from "../../domain/student";
 import { cleanGeneratedFeedback } from "../feedback/feedbackTemplate";
 import { buildStudentGenerationMessages } from "../prompt/promptCompiler";
@@ -150,7 +150,7 @@ export const createStudentFeedbackStreamHandlers = (
 };
 
 export const startStudentFeedbackGeneration = ({
-  aiClient = new ProviderAIClient(),
+  aiClient,
   blockedStudentNames,
   coursePromptContext,
   form,
@@ -166,22 +166,20 @@ export const startStudentFeedbackGeneration = ({
     coursePromptContext,
     performanceText: getStudentPerformanceText(form, student, index),
     student,
-    students:
-      students ??
-      [
-        student,
-        ...blockedStudentNames.map((name) => ({
-          gender: "male" as const,
-          name,
-          version: student.version,
-        })),
-      ],
+    students: students ?? [
+      student,
+      ...blockedStudentNames.map((name) => ({
+        gender: "male" as const,
+        name,
+        version: student.version,
+      })),
+    ],
   });
 
   const generationOrchestrator =
     orchestrator ??
     createGenerationOrchestrator({
-      aiClient,
+      aiClient: aiClient ?? new ProviderAIClient(),
       promptRecipe,
       updateStudentInfo,
     });

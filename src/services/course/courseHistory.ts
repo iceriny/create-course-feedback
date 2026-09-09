@@ -4,7 +4,7 @@ import type {
   ClassTime,
   HistorysType,
   HistoryType,
-} from "../../components/types";
+} from "../../types";
 
 export const DEFAULT_COURSE_HISTORY_LIMIT = 20;
 

@@ -1,4 +1,4 @@
-import type { StudentBasicInfo } from "../../components/types";
+import type { StudentBasicInfo } from "../../types";
 import { normalizeStoredStudents } from "../../domain/student";
 import {
   readStorageJson,

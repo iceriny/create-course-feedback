@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { dexieStorage } from "../utils/dexieStorage";
-import type { V1InputSuggestions, V2QuickOptions } from "../components/types";
+const storage = () =>
+  import("../utils/dexieStorage").then((module) => module.dexieStorage);
+import type { V1InputSuggestions, V2QuickOptions } from "../types";
 
 // 存储键名
 const V1_STORAGE_KEY = "v1_input_suggestions";
@@ -88,8 +89,9 @@ export const useInputAssistantStore = create<InputAssistantStore>(
     // 加载 V1 建议数据
     loadV1Suggestions: async () => {
       try {
-        const data =
-          await dexieStorage.getItem<V1InputSuggestions>(V1_STORAGE_KEY);
+        const data = await (
+          await storage()
+        ).getItem<V1InputSuggestions>(V1_STORAGE_KEY);
         set({ v1Suggestions: data || {} });
       } catch (error) {
         console.error("Failed to load V1 suggestions:", error);
@@ -126,7 +128,7 @@ export const useInputAssistantStore = create<InputAssistantStore>(
 
         // 更新状态和持久化
         set({ v1Suggestions: updatedSuggestions });
-        await dexieStorage.setItem(V1_STORAGE_KEY, updatedSuggestions);
+        await (await storage()).setItem(V1_STORAGE_KEY, updatedSuggestions);
       }
     },
 
@@ -163,7 +165,9 @@ export const useInputAssistantStore = create<InputAssistantStore>(
     // 加载 V2 自定义选项
     loadV2CustomOptions: async () => {
       try {
-        const data = await dexieStorage.getItem<V2QuickOptions>(V2_STORAGE_KEY);
+        const data = await (
+          await storage()
+        ).getItem<V2QuickOptions>(V2_STORAGE_KEY);
         set({
           v2CustomOptions: data || {
             total: [],
@@ -242,7 +246,7 @@ export const useInputAssistantStore = create<InputAssistantStore>(
 
         // 更新状态和持久化
         set({ v2CustomOptions: updatedOptions });
-        await dexieStorage.setItem(V2_STORAGE_KEY, updatedOptions);
+        await (await storage()).setItem(V2_STORAGE_KEY, updatedOptions);
       }
     },
 

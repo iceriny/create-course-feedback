@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { PROMPTS } from "../components/constants";
+import { PROMPTS } from "../constants";
 import API from "../AI_API/API";
 import { installMemoryStorage } from "../test/memoryStorage";
 import { useSettingsStore } from "./settingsStore";

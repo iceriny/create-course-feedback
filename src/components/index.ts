@@ -1,1 +1,1 @@
-export { default as MainUI } from "./MainUI";
+export { default as MainUI } from "./workspace/MainUI";

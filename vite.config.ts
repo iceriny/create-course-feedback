@@ -54,29 +54,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // 优化代码分割策略 - 将 React 和 Ant Design 打包在一起以避免兼容性问题
-        manualChunks: (id: string) => {
-          // React 和 Ant Design 相关库打包在一起
-          if (
-            id.includes("react") ||
-            id.includes("react-dom") ||
-            id.includes("antd") ||
-            id.includes("@ant-design") ||
-            id.includes("rc-") ||
-            id.includes("@rc-component")
-          ) {
-            return "vendor-react-antd";
-          }
-
-          // dayjs 单独打包
-          if (id.includes("dayjs")) {
-            return "vendor-dayjs";
-          }
-
-          // 其他小型依赖合并
-          if (id.includes("node_modules")) {
-            return "vendor-others";
-          }
-        },
         // 优化文件名
         chunkFileNames: "assets/[name]-[hash].js",
       },

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { StudentsInfo } from "../../components/types";
+import type { StudentsInfo } from "../../types";
 import type { PromptTrace } from "../../domain/ai";
 import type { KeyValueStorage } from "../persistence/localStorageRepository";
 import { readPromptTraces } from "../persistence/promptTraceRepository";
@@ -108,7 +108,10 @@ describe("generation orchestrator", () => {
 
     await waitFor(() => handlers.length === 2);
 
-    handlers[0].onContent("学生1表现积极，能够认真跟随老师完成练习。", "content");
+    handlers[0].onContent(
+      "学生1表现积极，能够认真跟随老师完成练习。",
+      "content",
+    );
     handlers[0].onFinish();
 
     await waitFor(() => handlers.length === 3);
@@ -170,7 +173,8 @@ describe("generation orchestrator", () => {
       attempt: 1,
       model: "test-model",
       output: {
-        content: "张三表现积极，能够认真跟随老师完成练习，并愿意分享自己的想法。",
+        content:
+          "张三表现积极，能够认真跟随老师完成练习，并愿意分享自己的想法。",
         status: "ready",
       },
       promptRecipe: { id: "programming", name: "编程" },
@@ -265,4 +269,55 @@ describe("generation orchestrator", () => {
       provider: "siliconflow",
     });
   });
+});
+
+describe("bounded streaming updates", () => {
+  it.each([10, 30, 100])(
+    "coalesces three streams with a %i-student roster",
+    async (size) => {
+      vi.useFakeTimers();
+      try {
+        const handlers: Parameters<AIClient["sendMessages"]>[0][] = [];
+        const patches = vi.fn();
+        const aiClient: AIClient = {
+          getModel: () => "test",
+          getProvider: () => "custom",
+          isTokenReady: () => true,
+          sendMessages: (input) => {
+            handlers.push(input);
+          },
+        };
+        const orchestrator = createGenerationOrchestrator({
+          aiClient,
+          updateStudentInfo: patches,
+          saveTrace: () => {},
+        });
+        for (let i = 0; i < size; i++)
+          orchestrator.queueStudentGeneration({
+            contextPlan: {
+              ...contextPlan,
+              student: {
+                ...contextPlan.student,
+                id: String(i),
+                name: `学生${i}`,
+              },
+            },
+            index: i,
+            systemPrompt: "test",
+          });
+        expect(handlers).toHaveLength(3);
+        patches.mockClear();
+        for (let i = 0; i < 100; i++)
+          handlers.forEach((handler) =>
+            handler.onContent(`观察内容${i}`, "content"),
+          );
+        expect(patches).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(60);
+        expect(patches).toHaveBeenCalledTimes(3);
+        orchestrator.cancelAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });

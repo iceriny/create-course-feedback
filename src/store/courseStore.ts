@@ -1,5 +1,5 @@
 import type { CourseTemplateContext } from "../domain/course";
-import type { HistorysType } from "../components/types";
+import type { HistorysType } from "../types";
 import {
   addCourseContextToHistory,
   buildClassTimeFromCourseContext,

@@ -13,6 +13,7 @@ export interface AIClientStreamHandlers {
 
 export interface AIClientSendInput extends AIClientStreamHandlers {
   messages: Message[];
+  signal?: AbortSignal;
 }
 
 export interface AIClient {
@@ -23,34 +24,28 @@ export interface AIClient {
 }
 
 export class ProviderAIClient implements AIClient {
-  constructor(private readonly api: Pick<API, "sendMessage"> = new API()) {}
-
+  private readonly config = API.snapshot();
   getModel() {
-    return API.getModel();
+    return this.config.model;
   }
-
   getProvider() {
-    return API.getProvider();
+    return this.config.provider;
   }
-
   isTokenReady() {
-    return API.tokenReady();
+    return Boolean(this.config.token);
   }
-
-  sendMessages({ messages, onContent, onError, onFinish }: AIClientSendInput) {
-    void this.api.sendMessage(
-      (content, type) => {
-        if (content === null) {
-          onError(new Error("生成失败，请稍后重试。"));
-          return;
-        }
-
-        if (type) {
-          onContent(content, type);
-        }
-      },
-      onFinish,
-      ...messages,
-    );
+  async sendMessages({
+    messages,
+    onContent,
+    onError,
+    onFinish,
+    signal,
+  }: AIClientSendInput) {
+    try {
+      await API.request(this.config, messages, onContent, signal);
+      onFinish();
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error("生成失败，请重试。"));
+    }
   }
 }

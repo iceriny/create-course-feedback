@@ -1,4 +1,4 @@
-import type { StudentBasicInfo } from "../../components/types";
+import type { StudentBasicInfo } from "../../types";
 import type { StudentGenerationContextPolicy } from "../../domain/ai";
 
 export interface StudentGenerationContextPlan {

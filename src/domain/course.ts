@@ -52,7 +52,10 @@ export const hasCompleteCourseTime = (
     Array.isArray(time) &&
     time.length === 2 &&
     dayjs.isDayjs(time[0]) &&
-    dayjs.isDayjs(time[1])
+    dayjs.isDayjs(time[1]) &&
+    time[0].isValid() &&
+    time[1].isValid() &&
+    time[1].isAfter(time[0])
   );
 };
 

@@ -7,6 +7,8 @@ import {
   buildFeedbackBatchMarkdown,
   buildStudentFeedbackMarkdown,
   cleanGeneratedFeedback,
+  DEFAULT_FEEDBACK_TEMPLATE,
+  getFeedbackTemplateIssues,
 } from "./feedbackTemplate";
 
 const courseContext: CourseTemplateContext = {
@@ -55,6 +57,30 @@ describe("feedback template service", () => {
     ).toContain("### 张三\n张三|《Scratch》|表现积极|老师");
   });
 
+  it("removes an empty signature and preserves literal template-like feedback", () => {
+    const content = "掌握了 $& 和 {{studentName}} 的用法";
+    expect(
+      buildStudentFeedbackMarkdown({
+        courseContext,
+        customTemplate: "{{signature}}{{ courseFeedback }}",
+        signature: "",
+        student: students[0],
+        studentInfo: { ...studentsInfo[0], content },
+      }),
+    ).toBe(`### 张三\n${content}`);
+  });
+
+  it("identifies a missing feedback field and unknown placeholders", () => {
+    expect(getFeedbackTemplateIssues(DEFAULT_FEEDBACK_TEMPLATE)).toEqual([]);
+    expect(
+      getFeedbackTemplateIssues("{{ courseFeedback }} {{signature}}"),
+    ).toEqual([]);
+    expect(getFeedbackTemplateIssues("家长您好 {{courseFeedbak}}")).toEqual([
+      expect.stringContaining("课堂表现"),
+      expect.stringContaining("{{courseFeedbak}}"),
+    ]);
+  });
+
   it("filters inactive or empty feedback when requested", () => {
     const result = buildFeedbackBatchMarkdown({
       courseContext,
@@ -81,7 +107,13 @@ describe("feedback template service", () => {
 it("excludes unfinished, failed, and unconfirmed drafts from confirmed export", () => {
   for (const patch of [
     { loading: true, confirmed: true },
+    {
+      loading: false,
+      generation: { status: "queued" as const },
+      confirmed: true,
+    },
     { generation: { status: "failed" as const }, confirmed: true },
+    { feedbackNeedsUpdate: "course" as const, confirmed: true },
     { confirmed: false },
   ]) {
     expect(

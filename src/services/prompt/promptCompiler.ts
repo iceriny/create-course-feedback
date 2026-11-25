@@ -41,7 +41,11 @@ export const buildStudentGenerationMessages = ({
     { content: systemPrompt, role: "system" },
     { content: coursePromptContext, role: "user" },
     {
-      content: `学员姓名: ${student.name}`,
+      content:
+        `学员姓名: ${student.name}` +
+        (student.gender === "unspecified"
+          ? "\n请使用学员姓名或“该同学”作为称呼。"
+          : ""),
       role: "user",
     },
     {

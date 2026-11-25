@@ -1,6 +1,9 @@
 import { create } from "zustand";
 
-import { DEFAULT_FEEDBACK_TEMPLATE } from "../services/feedback/feedbackTemplate";
+import {
+  DEFAULT_FEEDBACK_SIGNATURE,
+  DEFAULT_FEEDBACK_TEMPLATE,
+} from "../services/feedback/feedbackTemplate";
 import {
   readStorageString,
   writeStorageString,
@@ -15,17 +18,15 @@ interface FeedbackStore {
 
 const FEEDBACK_TEMPLATE_KEY = "feedback-template";
 const SIGNATURE_KEY = "signature";
-const DEFAULT_SIGNATURE = "哆啦人工智能小栈";
-
 export const useFeedbackStore = create<FeedbackStore>((set) => ({
   customTemplate: DEFAULT_FEEDBACK_TEMPLATE,
-  signature: DEFAULT_SIGNATURE,
+  signature: DEFAULT_FEEDBACK_SIGNATURE,
 
   hydrateFeedbackSettings: () => {
     set({
       customTemplate:
         readStorageString(FEEDBACK_TEMPLATE_KEY) ?? DEFAULT_FEEDBACK_TEMPLATE,
-      signature: readStorageString(SIGNATURE_KEY) ?? DEFAULT_SIGNATURE,
+      signature: readStorageString(SIGNATURE_KEY) ?? DEFAULT_FEEDBACK_SIGNATURE,
     });
   },
 

@@ -1,6 +1,16 @@
 import type { CourseTemplateContext } from "../../domain/course";
 import type { StudentBasicInfo, StudentsInfo } from "../../types";
-import { replaceTemplate } from "../../utils";
+import {
+  isFeedbackConfirmed,
+  isFeedbackReviewable,
+} from "../../domain/feedbackStatus";
+import {
+  isTemplatePlaceholder,
+  readTemplatePlaceholders,
+  replaceTemplate,
+} from "../../utils/template";
+
+export const DEFAULT_FEEDBACK_SIGNATURE = "哆啦人工智能小栈";
 
 export const DEFAULT_FEEDBACK_TEMPLATE = `**课程名称:** {{courseName}}
 
@@ -17,6 +27,20 @@ export const DEFAULT_FEEDBACK_TEMPLATE = `**课程名称:** {{courseName}}
 
 {{signature}}
 {{currentDate}}`;
+
+export function getFeedbackTemplateIssues(template: string): string[] {
+  const placeholders = new Set(readTemplatePlaceholders(template));
+  const issues: string[] = [];
+  if (!placeholders.has("courseFeedback"))
+    issues.push("请插入“课堂表现”字段，以包含每位学生的反馈正文。");
+  for (const placeholder of placeholders) {
+    if (!isTemplatePlaceholder(placeholder))
+      issues.push(
+        `无法识别字段 {{${placeholder}}}，请从可插入字段中重新选择。`,
+      );
+  }
+  return issues;
+}
 
 export interface StudentFeedbackExportInput {
   courseContext: CourseTemplateContext;
@@ -68,18 +92,9 @@ export const buildFeedbackBatchMarkdown = ({
   return students
     .map((student, index) => {
       const studentInfo = studentsInfo[index];
-      if (
-        onlyReadyAndActivated &&
-        (!studentInfo?.content?.trim() ||
-          !studentInfo.activated ||
-          studentInfo.loading ||
-          studentInfo.generation?.status === "failed" ||
-          studentInfo.generation?.status === "queued")
-      ) {
+      if (onlyReadyAndActivated && !isFeedbackReviewable(studentInfo))
         return null;
-      }
-
-      if (onlyConfirmed && !studentInfo?.confirmed) return null;
+      if (onlyConfirmed && !isFeedbackConfirmed(studentInfo)) return null;
       return `${buildStudentFeedbackMarkdown({
         courseContext,
         customTemplate,
@@ -96,7 +111,7 @@ export const cleanGeneratedFeedback = (content: string) => {
   return content
     .replace(/(?:(?:\*\*)?课堂表现.*?(?::|：)(?:\*\*)?)(?::|：)?/, "")
     .replace(/\d{4}年 ?\d{1,2}月\d{1,2}(?:日|天)/, "")
-    .replace(/哆啦人工智能小栈/, "")
+    .replace(DEFAULT_FEEDBACK_SIGNATURE, "")
     .trim();
 };
 

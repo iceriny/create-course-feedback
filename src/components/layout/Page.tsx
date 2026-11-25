@@ -4,7 +4,7 @@ import { FC } from "react";
 import { MainUI } from "..";
 import Logo from "../common/Logo";
 
-const { Header, Footer, Content } = Layout;
+const { Footer, Content } = Layout;
 
 const { useToken } = theme;
 
@@ -27,15 +27,15 @@ const Page: FC<PageProps> = ({ sendMessage, sendWarning }) => {
   const { token } = useToken();
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Header style={{ fontSize: "1.5rem" }}>
-        <Flex justify="space-between">
-          <span>
-            <Logo />
+      <header className="page-header">
+        <div className="page-header-inner">
+          <span className="page-brand">
+            <Logo className="page-brand-mark" />
             课程反馈生成器
           </span>
-          <span>v{__APP_VERSION__}</span>
-        </Flex>
-      </Header>
+          <span className="page-version">v{__APP_VERSION__}</span>
+        </div>
+      </header>
       <Content className="page-content">
         <MainUI sendMessage={sendMessage} sendWarning={sendWarning} />
       </Content>

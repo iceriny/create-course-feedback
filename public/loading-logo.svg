@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>正在加载课程反馈</title>
+  <style>
+    @media (prefers-color-scheme: dark) {
+      #crossbar { fill: #E7EDE9; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      #crossbar { animation: write 2s ease-in-out infinite; }
+      #loop { transform-origin: 24px 37px; animation: lean 2s ease-in-out infinite; }
+    }
+    @keyframes write {
+      0%, 18%, 82%, 100% { clip-path: inset(0); }
+      42% { clip-path: inset(0 0 0 100%); }
+      42.01%, 48% { clip-path: inset(0 100% 0 0); }
+    }
+    @keyframes lean {
+      0%, 30%, 100% { transform: rotate(0deg); }
+      49% { transform: rotate(-4deg); }
+      76% { transform: rotate(2deg); }
+    }
+  </style>
+  <path id="loop" fill="#EC6055" fill-rule="evenodd"
+        d="M6 62C12 57 15.5 47 18 36l5-17C26 7 33 2 42 3c10 1 10 13 2 21-4 5-10 9-16 12l-3 10C22 56 14 62 6 62Z
+           M30 27c5-4 12-12 12-16 0-2-2-3-4-1-4 3-6 11-8 17Z"/>
+  <path id="crossbar" fill="#2C4149"
+        d="M7 40c6-7 20-9 30-10 10-2 15-4 20-8 1 7-5 12-15 14-15 2-27 1-35 8Z"/>
+</svg>

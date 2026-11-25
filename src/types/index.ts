@@ -5,7 +5,7 @@ import type { FeedbackGenerationState } from "../domain/ai";
 export interface StudentBasicInfo {
   id?: string;
   name: string;
-  gender: "male" | "female";
+  gender: "unspecified" | "male" | "female";
   version: StudentContentPropsVersion; // 每个学生独立的版本选择
 }
 
@@ -21,6 +21,8 @@ export interface StudentsInfo {
   confirmed?: boolean;
   copiedAt?: string;
   previousContent?: string;
+  feedbackNeedsUpdate?: "observation" | "course" | "student";
+  previousFeedbackNeedsUpdate?: StudentsInfo["feedbackNeedsUpdate"];
   draftContent?: string;
 }
 

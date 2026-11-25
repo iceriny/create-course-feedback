@@ -1,5 +1,29 @@
 import dayjs from "dayjs";
 
+export const TEMPLATE_PLACEHOLDERS = {
+  studentName: "学生姓名",
+  lastName: "学生姓氏",
+  firstName: "学生名字",
+  courseName: "课程名称",
+  courseTime: "授课时间",
+  courseContents: "课程内容概览",
+  courseObjectives: "教学目标",
+  courseFeedback: "课堂表现",
+  signature: "签名",
+  currentDate: "当前日期",
+};
+
+type TemplatePlaceholder = keyof typeof TEMPLATE_PLACEHOLDERS;
+const placeholderPattern = /(?<!\{)\{\{([^{}\r\n]*)\}\}(?!\})/g;
+
+export const isTemplatePlaceholder = (
+  name: string,
+): name is TemplatePlaceholder =>
+  Object.prototype.hasOwnProperty.call(TEMPLATE_PLACEHOLDERS, name);
+
+export const readTemplatePlaceholders = (template: string) =>
+  Array.from(template.matchAll(placeholderPattern), ([, name]) => name.trim());
+
 /**
  * 模板替换参数接口
  */
@@ -32,63 +56,26 @@ export function replaceTemplate(
   template: string,
   params: TemplateReplaceParams,
 ): string {
-  let result = template;
-  if (params.studentName) {
-    result = result.replace(/{{studentName}}/g, params.studentName);
-    const studentLastName = params.studentName.includes("|") ? params.studentName.split("|")[0] : params.studentName[0];
-    const studentFirstName = params.studentName.includes("|") ? params.studentName.split("|")[1] : params.studentName.slice(1);
-    result = result.replace(/{{lastName}}/g, studentLastName);
-    result = result.replace(/{{firstName}}/g, studentFirstName);
-  }
-
-
-  // 替换课程名称
-  if (params.courseName) {
-    result = result.replace(/{{courseName}}/g, `《${params.courseName}》`);
-  }
-
-  // 替换课程时间
-  if (params.courseTime) {
-    result = result.replace(
-      /{{courseTime}}/g,
-      `@${params.courseTime[0].format(
-        "YYYY[年] MM[月]DD[日] HH:mm",
-      )} -> ${params.courseTime[1].format("HH:mm")}`,
-    );
-  }
-
-  // 替换课程内容
-  if (params.courseContents) {
-    result = result.replace(
-      /{{courseContents}}/g,
-      params.courseContents.join(""),
-    );
-  }
-
-  // 替换教学目标
-  if (params.courseObjectives) {
-    result = result.replace(
-      /{{courseObjectives}}/g,
-      params.courseObjectives.join(""),
-    );
-  }
-
-  // 替换签名
-  if (params.signature) {
-    result = result.replace(/{{signature}}/g, params.signature);
-  }
-
-  // 替换当前日期
-  const currentDate = params.customDate || dayjs();
-  result = result.replace(
-    /{{currentDate}}/g,
-    currentDate.format("YYYY[年] MM[月]DD[日]"),
-  );
-
-  // 替换学生课堂表现
-  if (params.courseFeedback) {
-    result = result.replace(/{{courseFeedback}}/g, params.courseFeedback);
-  }
-
-  return result;
+  const studentName = params.studentName ?? "";
+  const [lastName, firstName] = studentName.includes("|")
+    ? studentName.split("|")
+    : [studentName.charAt(0), studentName.slice(1)];
+  const values: Record<TemplatePlaceholder, string> = {
+    studentName,
+    lastName,
+    firstName,
+    courseName: params.courseName ? `《${params.courseName}》` : "",
+    courseTime: params.courseTime
+      ? `@${params.courseTime[0].format("YYYY[年] MM[月]DD[日] HH:mm")} -> ${params.courseTime[1].format("HH:mm")}`
+      : "",
+    courseContents: params.courseContents?.join("") ?? "",
+    courseObjectives: params.courseObjectives?.join("") ?? "",
+    courseFeedback: params.courseFeedback ?? "",
+    signature: params.signature ?? "",
+    currentDate: (params.customDate ?? dayjs()).format("YYYY[年] MM[月]DD[日]"),
+  };
+  return template.replace(placeholderPattern, (match, name: string) => {
+    const field = name.trim();
+    return isTemplatePlaceholder(field) ? values[field] : match;
+  });
 }

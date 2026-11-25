@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { installMemoryStorage } from "../test/memoryStorage";
-import { useRosterStore } from "./rosterStore";
+import { flushLessonDraft, useRosterStore } from "./rosterStore";
 
 describe("roster store", () => {
   beforeEach(() => {
@@ -14,26 +14,27 @@ describe("roster store", () => {
     useRosterStore
       .getState()
       .updateStudentsFromRawValues(["李四", "张三"], "cpp0608");
-    useRosterStore.getState().updateStudentGender(1, "female", "cpp0608");
+    useRosterStore.getState().updateStudentGender(1, "female");
     useRosterStore.getState().updateStudentInfo(0, {
       content: "反馈草稿",
       activated: false,
     });
 
     expect(useRosterStore.getState().studentsList).toMatchObject([
-      { name: "李四", gender: "male", version: "v2" },
-      { name: "张三", gender: "female", version: "v2" },
+      { name: "李四", gender: "unspecified", version: "v1" },
+      { name: "张三", gender: "female", version: "v1" },
     ]);
     expect(useRosterStore.getState().studentsInfo[0]).toMatchObject({
       activated: false,
       content: "反馈草稿",
       name: "李四",
     });
+    expect(flushLessonDraft()).toBe(true);
     expect(
       JSON.parse(localStorage.getItem("cpp0608_std") ?? "[]"),
     ).toMatchObject([
-      { name: "李四", gender: "male", version: "v2" },
-      { name: "张三", gender: "female", version: "v2" },
+      { name: "李四", gender: "unspecified", version: "v1" },
+      { name: "张三", gender: "female", version: "v1" },
     ]);
   });
 
@@ -48,7 +49,7 @@ describe("roster store", () => {
 
     useRosterStore.getState().loadStudentsFromStorage("cpp0608");
     useRosterStore.getState().updateStudentInfo(0, { content: "B content" });
-    useRosterStore.getState().sortStudentsByName("cpp0608");
+    useRosterStore.getState().sortStudentsByName();
     useRosterStore.getState().toggleAllStudentsActivation();
 
     expect(

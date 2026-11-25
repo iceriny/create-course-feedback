@@ -27,8 +27,8 @@ describe("student domain", () => {
 
   it("normalizes stored old and new roster formats", () => {
     expect(normalizeStoredStudents([" 张三 ", "李四"])).toEqual([
-      { name: "张三", gender: "male", version: "v2" },
-      { name: "李四", gender: "male", version: "v2" },
+      { name: "张三", gender: "unspecified", version: "v1" },
+      { name: "李四", gender: "unspecified", version: "v1" },
     ]);
 
     expect(
@@ -38,7 +38,7 @@ describe("student domain", () => {
       ]),
     ).toEqual([
       { name: "小红", gender: "female", version: "v1" },
-      { name: "小蓝", gender: "male", version: "v2" },
+      { name: "小蓝", gender: "unspecified", version: "v1" },
     ]);
   });
 
@@ -60,7 +60,7 @@ describe("student domain", () => {
       mergeStudentNamesWithExistingInfo(["张三", "李四"], existingStudents),
     ).toEqual([
       { name: "张三", gender: "female", version: "v1" },
-      { name: "李四", gender: "male", version: "v2" },
+      { name: "李四", gender: "unspecified", version: "v1" },
     ]);
   });
 

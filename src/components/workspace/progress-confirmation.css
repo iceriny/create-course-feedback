@@ -1,0 +1,75 @@
+.progress-label {
+  display: grid;
+  inline-size: clamp(82px, 11vw, 140px);
+  justify-items: end;
+  align-items: center;
+  font-size: 14px;
+}
+
+.progress-label > span {
+  grid-area: 1 / 1;
+}
+
+.progress-label-default {
+  color: var(--muted);
+  transition: opacity var(--motion-fast, 140ms) var(--motion-settle, ease-out);
+}
+
+.progress-label[data-confirmed="true"] .progress-label-default {
+  opacity: 0;
+}
+
+.progress-confirmation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: var(--success, #27734d);
+  animation: progress-confirmation 2.4s var(--motion-settle, ease-out) both;
+}
+
+.progress-confirmation > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .progress-confirmation {
+  color: #9fc8ae;
+}
+
+@keyframes progress-confirmation {
+  0% {
+    opacity: 0;
+    translate: 0 3px;
+  }
+  8%,
+  89% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes progress-confirmation-reduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-label-default {
+    transition: none;
+  }
+
+  .progress-confirmation {
+    animation-name: progress-confirmation-reduced;
+    animation-timing-function: step-end;
+  }
+}

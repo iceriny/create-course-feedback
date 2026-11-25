@@ -1,4 +1,8 @@
-import type { StudentBasicInfo, StudentsInfo } from "../types";
+import type {
+  StudentBasicInfo,
+  StudentContentPropsVersion,
+  StudentsInfo,
+} from "../types";
 
 export interface LessonCourse {
   name: string;
@@ -13,6 +17,7 @@ export interface LessonDraft {
   course: LessonCourse;
   studentsList: StudentBasicInfo[];
   studentsInfo: Record<number, StudentsInfo>;
+  defaultStudentVersion?: StudentContentPropsVersion;
 }
 export function isLessonDraft(value: unknown): value is LessonDraft {
   if (!value || typeof value !== "object") return false;
@@ -28,12 +33,14 @@ export function isLessonDraft(value: unknown): value is LessonDraft {
     ) &&
     Array.isArray(draft.studentsList) &&
     Boolean(draft.studentsInfo) &&
+    (draft.defaultStudentVersion === undefined ||
+      ["v1", "v2"].includes(draft.defaultStudentVersion)) &&
     draft.studentsList.every((student, index) => {
       const info = draft.studentsInfo[index];
       return (
         student &&
         typeof student.name === "string" &&
-        ["male", "female"].includes(student.gender) &&
+        ["unspecified", "male", "female"].includes(student.gender) &&
         ["v1", "v2"].includes(student.version) &&
         info &&
         typeof info.content === "string" &&

@@ -5,11 +5,19 @@ import {
 } from "../domain/lesson";
 import { create } from "zustand";
 
-import type { StudentBasicInfo, StudentsInfo } from "../types";
+import type {
+  StudentBasicInfo,
+  StudentContentPropsVersion,
+  StudentsInfo,
+} from "../types";
+import { markFeedbackForUpdate } from "../domain/feedbackStatus";
 import {
+  createStudentsFromNames,
   createStudentsInfo,
+  DEFAULT_STUDENT_VERSION,
   parseStudentNamesInput,
   sortStudentsAndInfoByName,
+  withObservationFormat,
 } from "../domain/student";
 import {
   readRosterStudents,
@@ -22,10 +30,13 @@ type StudentInfoPatch =
 
 export type { LessonCourse, LessonDraft } from "../domain/lesson";
 interface RosterStore extends LessonDraft {
-  saveStatus: "saved" | "saving" | "error";
+  saveStatus: "saved" | "saving" | "error" | "conflict";
+  defaultStudentVersion: StudentContentPropsVersion;
   setCourse: (course: Partial<LessonCourse>) => void;
-  newLesson: () => void;
-  restoreLesson: (draft: LessonDraft) => void;
+  newLesson: () => boolean;
+  restoreLesson: (draft: LessonDraft) => boolean;
+  setDefaultStudentVersion: (version: StudentContentPropsVersion) => void;
+  applyDefaultStudentVersion: () => void;
   renameStudent: (index: number, name: string) => void;
   removeStudent: (index: number) => void;
   studentsInfo: Record<number, StudentsInfo>;
@@ -34,21 +45,19 @@ interface RosterStore extends LessonDraft {
   getActivatedStudentsCount: () => { activated: number; total: number };
   getStudentNames: () => string[];
   initializeStudentsInfo: (students: StudentBasicInfo[]) => void;
-  loadStudentsFromStorage: (className: string) => void;
+  loadStudentsFromStorage: (className: string) => boolean;
   resetRosterState: () => void;
-  sortStudentsByName: (className: string) => void;
+  sortStudentsByName: () => void;
   toggleAllStudentsActivation: () => void;
   toggleStudentActivation: (index: number) => void;
   updateStudentGender: (
     index: number,
     gender: StudentBasicInfo["gender"],
-    className: string,
   ) => void;
   updateStudentInfo: (index: number, info: StudentInfoPatch) => void;
   updateStudentVersion: (
     index: number,
     version: StudentBasicInfo["version"],
-    className: string,
   ) => void;
   updateStudentsFromRawValues: (rawValues: string[], className: string) => void;
 }
@@ -71,79 +80,129 @@ const emptyRosterState = {
   course: emptyCourse,
   studentsInfo: {},
   studentsList: [],
+  defaultStudentVersion: DEFAULT_STUDENT_VERSION,
 };
+
+const changeObservationFormat = (
+  info: StudentsInfo,
+  version: StudentContentPropsVersion,
+) => ({
+  ...markFeedbackForUpdate(info, "observation"),
+  performance: withObservationFormat(info, version),
+});
+
+function reviveStudentInfo(info: StudentsInfo): StudentsInfo {
+  return {
+    ...info,
+    draftContent: undefined,
+    loading: false,
+    generation: info.loading
+      ? {
+          ...info.generation,
+          status: "failed",
+          errorMessage: "上次生成已中断，可以重新生成。",
+        }
+      : info.generation,
+  };
+}
 
 export const useRosterStore = create<RosterStore>((set, get) => ({
   ...emptyRosterState,
   saveStatus: "saved",
-  setCourse: (course) =>
-    set((state) => ({
-      course: { ...state.course, ...course },
-      studentsInfo: Object.fromEntries(
-        Object.entries(state.studentsInfo).map(([key, info]) => [
-          key,
-          { ...info, confirmed: false, copiedAt: undefined },
-        ]),
-      ),
-    })),
-  newLesson: () => {
-    if (!flushLessonDraft()) return;
-    const state = get();
-    try {
-      localStorage.setItem(
-        `lessonArchive:${state.lessonId}`,
-        JSON.stringify(toDraft(state)),
+  setCourse: (patch) =>
+    set((state) => {
+      const fields = Object.keys(patch) as (keyof LessonCourse)[];
+      if (fields.every((field) => patch[field] === state.course[field]))
+        return state;
+
+      const course = { ...state.course, ...patch };
+      const normalize = (value: string) =>
+        value
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join("\n");
+      const changed = fields.some(
+        (field) => normalize(course[field]) !== normalize(state.course[field]),
       );
-    } catch {
-      set({ saveStatus: "error" });
-      return;
-    }
+      return {
+        course,
+        studentsInfo: changed
+          ? Object.fromEntries(
+              Object.entries(state.studentsInfo).map(([key, info]) => [
+                key,
+                markFeedbackForUpdate(info, "course"),
+              ]),
+            )
+          : state.studentsInfo,
+      };
+    }),
+  newLesson: () => {
+    if (!archiveCurrentLesson()) return false;
+    const state = get();
     set({
       lessonId: crypto.randomUUID(),
       course: { ...emptyCourse },
       studentsInfo: createStudentsInfo(state.studentsList),
     });
+    return true;
   },
   restoreLesson: (draft) => {
-    if (!isLessonDraft(draft)) {
-      set({ saveStatus: "error" });
-      return;
-    }
-    if (!flushLessonDraft()) return;
-    try {
-      const current = get();
-      if (current.lessonId)
-        localStorage.setItem(
-          `lessonArchive:${current.lessonId}`,
-          JSON.stringify(toDraft(current)),
-        );
-    } catch {
-      set({ saveStatus: "error" });
-      return;
-    }
+    const current = get();
+    if (
+      !isLessonDraft(draft) ||
+      draft.activeClass !== current.activeClass ||
+      draft.lessonId === current.lessonId ||
+      !archiveCurrentLesson()
+    )
+      return false;
     set({
       ...draft,
+      defaultStudentVersion: current.defaultStudentVersion,
       studentsList: identify(draft.studentsList),
       studentsInfo: Object.fromEntries(
         Object.entries(draft.studentsInfo).map(([key, info]) => [
           key,
-          { ...info, loading: false, draftContent: undefined },
+          reviveStudentInfo(info),
         ]),
       ),
     });
+    return true;
   },
+  setDefaultStudentVersion: (defaultStudentVersion) =>
+    set({ defaultStudentVersion }),
+  applyDefaultStudentVersion: () =>
+    set((state) => {
+      const version = state.defaultStudentVersion;
+      if (state.studentsList.every((student) => student.version === version))
+        return state;
+      return {
+        studentsList: state.studentsList.map((student) =>
+          student.version === version ? student : { ...student, version },
+        ),
+        studentsInfo: Object.fromEntries(
+          state.studentsList.map((student, index) => [
+            index,
+            student.version === version
+              ? state.studentsInfo[index]
+              : changeObservationFormat(state.studentsInfo[index], version),
+          ]),
+        ),
+      };
+    }),
   renameStudent: (index, name) => {
-    if (!name.trim()) return;
+    name = name.trim();
+    const student = get().studentsList[index];
+    if (!student || !name || student.name === name) return;
     set((state) => ({
       studentsList: state.studentsList.map((s, i) =>
-        i === index ? { ...s, name: name.trim() } : s,
+        i === index ? { ...s, name } : s,
       ),
       studentsInfo: {
         ...state.studentsInfo,
         [index]: {
-          ...state.studentsInfo[index],
-          name: name.trim(),
-          confirmed: false,
+          ...markFeedbackForUpdate(state.studentsInfo[index], "student"),
+          name,
         },
       },
     }));
@@ -159,7 +218,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     })),
 
   clearAllStudents: () => {
-    set(emptyRosterState);
+    get().resetRosterState();
   },
 
   getActivatedStudentsCount: () => {
@@ -178,54 +237,20 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
 
   loadStudentsFromStorage: (className) => {
     className = className.trim();
-    if (!className || className === get().activeClass) return;
-    if (!flushLessonDraft()) return;
-    let draft: LessonDraft | undefined;
-    try {
-      const raw = localStorage.getItem(`lessonDraft:${className}`);
-      if (raw) draft = JSON.parse(raw);
-      if (draft && !isLessonDraft(draft)) throw new Error("invalid draft");
-    } catch {
-      set({ saveStatus: "error" });
-      return;
-    }
-    const students = identify(
-      draft?.studentsList ?? readRosterStudents(className),
-    );
-    const infos = draft?.studentsInfo ?? createStudentsInfo(students);
-    set({
-      activeClass: className,
-      lessonId: draft?.lessonId || crypto.randomUUID(),
-      course: draft?.course ?? { ...emptyCourse },
-      studentsList: students,
-      studentsInfo: Object.fromEntries(
-        students.map((student, index) => {
-          const info = infos[index] || createStudentsInfo([student])[0];
-          return [
-            index,
-            {
-              ...info,
-              draftContent: undefined,
-              loading: false,
-              generation: info.loading
-                ? {
-                    ...info.generation,
-                    status: "failed",
-                    errorMessage: "上次生成已中断，可以重新生成。",
-                  }
-                : info.generation,
-            },
-          ];
-        }),
-      ),
-    });
+    if (!className) return false;
+    if (className === get().activeClass) return true;
+    return flushLessonDraft() && hydrateLesson(className);
   },
 
   resetRosterState: () => {
-    set(emptyRosterState);
+    clearTimeout(saveTimer);
+    storedDraft = null;
+    cleanSnapshot = undefined;
+    draftPending = false;
+    set({ ...emptyRosterState, saveStatus: "saved" });
   },
 
-  sortStudentsByName: (className) => {
+  sortStudentsByName: () => {
     const { studentsInfo, studentsList } = get();
     const { sortedInfo, sortedStudents } = sortStudentsAndInfoByName(
       studentsList,
@@ -233,7 +258,6 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     );
 
     set({ studentsInfo: sortedInfo, studentsList: sortedStudents });
-    writeRosterStudents(className, sortedStudents);
   },
 
   toggleAllStudentsActivation: () => {
@@ -264,15 +288,20 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     });
   },
 
-  updateStudentGender: (index, gender, className) => {
-    const students = [...get().studentsList];
-    if (!students[index]) return;
-
-    students[index] = { ...students[index], gender };
-    get().updateStudentInfo(index, { confirmed: false, copiedAt: undefined });
-    set({ studentsList: students });
-    writeRosterStudents(className, students);
-  },
+  updateStudentGender: (index, gender) =>
+    set((state) => {
+      const student = state.studentsList[index];
+      if (!student || student.gender === gender) return state;
+      return {
+        studentsList: state.studentsList.map((entry, i) =>
+          i === index ? { ...entry, gender } : entry,
+        ),
+        studentsInfo: {
+          ...state.studentsInfo,
+          [index]: markFeedbackForUpdate(state.studentsInfo[index], "student"),
+        },
+      };
+    }),
 
   updateStudentInfo: (index, info) => {
     set((state) => {
@@ -293,22 +322,33 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     });
   },
 
-  updateStudentVersion: (index, version, className) => {
-    const students = [...get().studentsList];
-    if (!students[index]) return;
-
-    students[index] = { ...students[index], version };
-    get().updateStudentInfo(index, { confirmed: false, copiedAt: undefined });
-    set({ studentsList: students });
-    writeRosterStudents(className, students);
-  },
+  updateStudentVersion: (index, version) =>
+    set((state) => {
+      const student = state.studentsList[index];
+      if (!student || student.version === version) return state;
+      return {
+        studentsList: state.studentsList.map((entry, i) =>
+          i === index ? { ...entry, version } : entry,
+        ),
+        studentsInfo: {
+          ...state.studentsInfo,
+          [index]: changeObservationFormat(state.studentsInfo[index], version),
+        },
+      };
+    }),
 
   updateStudentsFromRawValues: (rawValues, className) => {
+    className = className.trim();
     if (!className) {
       throw new Error("班级名不能为空！");
     }
 
     const names = parseStudentNamesInput(rawValues);
+    if (
+      className !== get().activeClass &&
+      !get().loadStudentsFromStorage(className)
+    )
+      return;
     const previous = get();
     const remaining = previous.studentsList.map((student, index) => ({
       student,
@@ -317,12 +357,10 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
     const pairs = names.map((name) => {
       const match = remaining.findIndex((item) => item.student.name === name);
       if (match >= 0) return remaining.splice(match, 1)[0];
-      const student: StudentBasicInfo = {
-        id: crypto.randomUUID(),
-        name,
-        gender: "male",
-        version: "v2",
-      };
+      const [student] = createStudentsFromNames(
+        [name],
+        previous.defaultStudentVersion,
+      );
       return { student, info: createStudentsInfo([student])[0] };
     });
     const students = identify(pairs.map((item) => item.student));
@@ -334,7 +372,6 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
       ),
       studentsList: students,
     });
-    writeRosterStudents(className, students);
   },
 }));
 
@@ -343,6 +380,7 @@ const toDraft = (state: RosterStore): LessonDraft => ({
   lessonId: state.lessonId,
   course: state.course,
   studentsList: state.studentsList,
+  defaultStudentVersion: state.defaultStudentVersion,
   studentsInfo: Object.fromEntries(
     Object.entries(state.studentsInfo).map(([key, info]) => [
       key,
@@ -358,17 +396,124 @@ const toDraft = (state: RosterStore): LessonDraft => ({
   ),
 });
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let storedDraft: string | null = null;
+let cleanSnapshot: string | undefined;
+let draftPending = false;
+let hydrating = false;
+let savingPaused = false;
+
+export function getCurrentLessonDraft() {
+  const state = useRosterStore.getState();
+  return state.activeClass ? toDraft(state) : undefined;
+}
+
+export function pauseLessonDraftSaving() {
+  savingPaused = true;
+  clearTimeout(saveTimer);
+  return () => {
+    savingPaused = false;
+    if (draftPending) scheduleSave();
+  };
+}
+
+function hydrateLesson(className: string): boolean {
+  try {
+    const raw = localStorage.getItem(`lessonDraft:${className}`);
+    const draft: unknown = raw ? JSON.parse(raw) : undefined;
+    if (raw && (!isLessonDraft(draft) || draft.activeClass !== className))
+      throw new Error("invalid draft");
+    const saved = draft as LessonDraft | undefined;
+    const students = identify(
+      saved?.studentsList ?? readRosterStudents(className),
+    );
+    const infos = saved?.studentsInfo ?? createStudentsInfo(students);
+    const updated = {
+      activeClass: className,
+      lessonId: saved?.lessonId ?? crypto.randomUUID(),
+      course: saved?.course ?? { ...emptyCourse },
+      studentsList: students,
+      defaultStudentVersion:
+        saved?.defaultStudentVersion ?? DEFAULT_STUDENT_VERSION,
+      studentsInfo: Object.fromEntries(
+        students.map((_, index) => [index, reviveStudentInfo(infos[index])]),
+      ),
+    };
+    // Navigation records the selected class once. Loading a draft leaves its
+    // stored version untouched until this tab edits it.
+    if (localStorage.getItem("lastActiveClass") !== className)
+      localStorage.setItem("lastActiveClass", className);
+    clearTimeout(saveTimer);
+    storedDraft = raw;
+    draftPending = false;
+    hydrating = true;
+    useRosterStore.setState({ ...updated, saveStatus: "saved" });
+    hydrating = false;
+    cleanSnapshot = saved
+      ? JSON.stringify(toDraft(useRosterStore.getState()))
+      : undefined;
+    if (!saved) scheduleSave();
+    return true;
+  } catch {
+    hydrating = false;
+    useRosterStore.setState({ saveStatus: "error" });
+    return false;
+  }
+}
+
+export function loadLatestLessonDraft() {
+  const { activeClass } = useRosterStore.getState();
+  return Boolean(activeClass && hydrateLesson(activeClass));
+}
+
+function archiveCurrentLesson() {
+  const draft = getCurrentLessonDraft();
+  if (!draft || !flushLessonDraft()) return false;
+  try {
+    if (
+      localStorage.getItem(`lessonDraft:${draft.activeClass}`) !== storedDraft
+    ) {
+      useRosterStore.setState({ saveStatus: "conflict" });
+      return false;
+    }
+    const { course, studentsInfo } = draft;
+    if (
+      [course.name, course.contents, course.objectives].some((value) =>
+        value.trim(),
+      ) ||
+      Object.values(studentsInfo).some(
+        (info) =>
+          info.content.trim() ||
+          Object.values(info.performance ?? {}).some((value) => value.trim()),
+      )
+    )
+      localStorage.setItem(
+        `lessonArchive:${draft.lessonId}`,
+        JSON.stringify(draft),
+      );
+    return true;
+  } catch {
+    useRosterStore.setState({ saveStatus: "error" });
+    return false;
+  }
+}
+
 export function flushLessonDraft(): boolean {
   clearTimeout(saveTimer);
   const state = useRosterStore.getState();
-  if (!state.activeClass) return true;
+  if (savingPaused || !state.activeClass || !draftPending) return true;
   try {
-    localStorage.setItem(
-      `lessonDraft:${state.activeClass}`,
-      JSON.stringify(toDraft(state)),
-    );
-    localStorage.setItem("lastActiveClass", state.activeClass);
-    writeRosterStudents(state.activeClass, state.studentsList);
+    const serialized = JSON.stringify(toDraft(state));
+    if (serialized !== cleanSnapshot) {
+      const key = `lessonDraft:${state.activeClass}`;
+      const current = localStorage.getItem(key);
+      if (current !== storedDraft && current !== serialized) {
+        useRosterStore.setState({ saveStatus: "conflict" });
+        return false;
+      }
+      if (current !== serialized) localStorage.setItem(key, serialized);
+      storedDraft = serialized;
+      writeRosterStudents(state.activeClass, state.studentsList);
+    }
     const classes = JSON.parse(
       localStorage.getItem("class-name") || "[]",
     ) as string[];
@@ -377,6 +522,8 @@ export function flushLessonDraft(): boolean {
         "class-name",
         JSON.stringify([...classes, state.activeClass]),
       );
+    cleanSnapshot = serialized;
+    draftPending = false;
     useRosterStore.setState({ saveStatus: "saved" });
     return true;
   } catch {
@@ -384,18 +531,26 @@ export function flushLessonDraft(): boolean {
     return false;
   }
 }
-useRosterStore.subscribe((state, previous) => {
-  if (
-    state.course === previous.course &&
-    state.studentsList === previous.studentsList &&
-    state.studentsInfo === previous.studentsInfo &&
-    state.lessonId === previous.lessonId
-  )
-    return;
-  if (!state.activeClass) return;
-  useRosterStore.setState({ saveStatus: "saving" });
+function scheduleSave() {
+  draftPending = true;
+  if (savingPaused) return;
+  if (useRosterStore.getState().saveStatus !== "conflict")
+    useRosterStore.setState({ saveStatus: "saving" });
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushLessonDraft, 300);
+}
+useRosterStore.subscribe((state, previous) => {
+  if (
+    hydrating ||
+    !state.activeClass ||
+    (state.course === previous.course &&
+      state.studentsList === previous.studentsList &&
+      state.studentsInfo === previous.studentsInfo &&
+      state.lessonId === previous.lessonId &&
+      state.defaultStudentVersion === previous.defaultStudentVersion)
+  )
+    return;
+  scheduleSave();
 });
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushLessonDraft);

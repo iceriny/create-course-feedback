@@ -1,155 +1,186 @@
-import { Button, Input, Modal, Space, Tag } from "antd";
-import { useCallback, useEffect, useState } from "react";
-import { TemplateEditorProps } from "../../types";
+import { Alert, Button, Col, Flex, Input, Modal, Row, Segmented } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
+import dayjs from "dayjs";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  buildStudentFeedbackMarkdown,
+  DEFAULT_FEEDBACK_SIGNATURE,
+  DEFAULT_FEEDBACK_TEMPLATE,
+  getFeedbackTemplateIssues,
+  toPlainText,
+} from "../../services/feedback/feedbackTemplate";
+import type { TemplateEditorProps } from "../../types";
+import { TEMPLATE_PLACEHOLDERS } from "../../utils/template";
+import ContentTransition from "../../motion/ContentTransition";
 
-// 定义可用的占位符
-const PLACEHOLDERS = {
-  学生姓名: "{{studentName}}",
-  学生姓氏: "{{lastName}}",
-  学生名字: "{{firstName}}",
-  课程名称: "{{courseName}}",
-  授课时间: "{{courseTime}}",
-  课程内容概览: "{{courseContents}}",
-  教学目标: "{{courseObjectives}}",
-  课堂表现: "{{courseFeedback}}",
-  签名: "{{signature}}",
-  当前日期: "{{currentDate}}",
-};
+const sampleStudent = {
+  name: "林安",
+  gender: "female",
+  version: "v1",
+} as const;
 
-/**
- * 模板编辑器组件 - 用于编辑自定义反馈模板
- */
 const TemplateEditor = ({
   isOpen,
   onClose,
+  afterClose,
   onSave,
   initialTemplate,
   initialSignature,
   sendMessage,
-}: TemplateEditorProps) => {
-  // 模板和签名状态
+}: TemplateEditorProps & { afterClose: () => void }) => {
   const [customTemplate, setCustomTemplate] = useState(initialTemplate);
   const [signature, setSignature] = useState(initialSignature);
-
-  // 光标位置
-  const [cursorPosition, setCursorPosition] = useState<number>(0);
-
-  // 当初始值变化时更新状态
+  const [format, setFormat] = useState<"plain" | "markdown">("plain");
+  const editorRef = useRef<TextAreaRef>(null);
+  const wasEditorFocused = useRef(false);
+  const issuesId = useId();
   useEffect(() => {
     setCustomTemplate(initialTemplate);
     setSignature(initialSignature);
   }, [initialTemplate, initialSignature]);
 
-  // 恢复默认模板
-  const handleResetToDefault = useCallback(() => {
-    // 定义默认模板
-    const DEFAULT_TEMPLATE = `**课程名称:** {{courseName}}
+  const insertField = (field: string) => {
+    const editor = editorRef.current?.resizableTextArea?.textArea;
+    const [start, end] =
+      editor && wasEditorFocused.current
+        ? [editor.selectionStart, editor.selectionEnd]
+        : [customTemplate.length, customTemplate.length];
+    const text = `{{${field}}}`;
+    setCustomTemplate(
+      customTemplate.slice(0, start) + text + customTemplate.slice(end),
+    );
+    requestAnimationFrame(() => {
+      if (!editor?.isConnected) return;
+      editor.focus();
+      editor.setSelectionRange(start + text.length, start + text.length);
+    });
+  };
 
-**授课时间:** {{courseTime}}
-
-**课程内容概览:**
-{{courseContents}}
-
-**教学目标:**
-{{courseObjectives}}
-
-**课堂表现:**
-{{courseFeedback}}
-
-{{signature}}
-{{currentDate}}`;
-
-    setCustomTemplate(DEFAULT_TEMPLATE);
-    setSignature("哆啦人工智能小栈");
-  }, []);
-
-  // 在光标位置插入文本的函数
-  const insertTextAtCursor = useCallback(
-    (text: string) => {
-      // 在当前光标位置插入文本
-      const before = customTemplate.substring(0, cursorPosition);
-      const after = customTemplate.substring(cursorPosition);
-      const newValue = before + text + after;
-      setCustomTemplate(newValue);
-
-      // 计算新的光标位置
-      const newPosition = cursorPosition + text.length;
-      setCursorPosition(newPosition);
+  const resetTemplate = () => {
+    setCustomTemplate(DEFAULT_FEEDBACK_TEMPLATE);
+    setSignature(DEFAULT_FEEDBACK_SIGNATURE);
+    wasEditorFocused.current = false;
+  };
+  const issues = getFeedbackTemplateIssues(customTemplate);
+  const lessonStart = dayjs().hour(16).minute(0);
+  const preview = buildStudentFeedbackMarkdown({
+    courseContext: {
+      className: "编程班",
+      courseName: "循环与条件判断",
+      courseContentItems: [{ item: "用循环完成重复任务" }],
+      courseObjectiveItems: [{ item: "能解释循环何时结束" }],
+      courseContents: ["- 用循环完成重复任务\n"],
+      courseObjectives: ["- 能解释循环何时结束\n"],
+      courseTime: [lessonStart, lessonStart.add(90, "minute")],
     },
-    [customTemplate, cursorPosition],
-  );
-
-  // 处理TextArea光标变化
-  const handleTextAreaSelect = (
-    e:
-      | React.MouseEvent<HTMLTextAreaElement>
-      | React.KeyboardEvent<HTMLTextAreaElement>,
-  ) => {
-    const target = e.target as HTMLTextAreaElement;
-    setCursorPosition(target.selectionStart || 0);
-  };
-
-  // 保存模板
-  const handleSave = () => {
-    onSave(customTemplate, signature);
-    sendMessage("反馈模板已保存");
-  };
+    customTemplate,
+    signature,
+    student: sampleStudent,
+    studentInfo: {
+      name: sampleStudent.name,
+      content:
+        "林安能独立写出循环，并逐步检查运行结果。课后可以试着解释循环条件变化时，程序会多执行几次。",
+      think_content: "",
+      loading: false,
+      activated: true,
+    },
+  });
 
   return (
     <Modal
       title="自定义反馈模板"
       open={isOpen}
       onCancel={onClose}
-      onOk={handleSave}
-      width={700}
+      afterClose={afterClose}
+      onOk={() => {
+        if (issues.length) return;
+        onSave(customTemplate, signature);
+        sendMessage("反馈模板已保存");
+      }}
+      okText="保存模板"
+      okButtonProps={{ disabled: issues.length > 0 }}
+      width={1040}
     >
-      <Space
-        direction="vertical"
-        style={{ width: "100%", marginBottom: "16px" }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <span style={{ marginRight: "8px" }}>可插入的占位符: </span>
-          {Object.entries(PLACEHOLDERS).map(([name, placeholder]) => (
-            <Tag
-              key={name}
-              color="blue"
-              style={{ cursor: "pointer", margin: "4px" }}
-              onClick={() => insertTextAtCursor(placeholder)}
-            >
-              {name}
-            </Tag>
-          ))}
-        </div>
-        <Input.TextArea
-          value={customTemplate}
-          onChange={(e) => setCustomTemplate(e.target.value)}
-          onKeyUp={handleTextAreaSelect}
-          onClick={handleTextAreaSelect}
-          placeholder="输入自定义模板"
-          autoSize={{ minRows: 10, maxRows: 20 }}
-        />
-        <div style={{ marginTop: "16px" }}>
-          <span style={{ marginRight: "8px" }}>自定义签名:</span>
-          <Input
-            value={signature}
-            onChange={(e) => setSignature(e.target.value)}
-            placeholder="输入自定义签名"
-            style={{ width: "300px" }}
-          />
-          <Tag
-            color="orange"
-            style={{ marginLeft: "8px", cursor: "pointer" }}
-            onClick={() => insertTextAtCursor(PLACEHOLDERS["签名"])}
-          >
-            插入签名占位符
-          </Tag>
-        </div>
-        <div style={{ marginTop: "16px", textAlign: "right" }}>
-          <Button onClick={handleResetToDefault} style={{ marginRight: "8px" }}>
-            恢复默认模板
-          </Button>
-        </div>
-      </Space>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} md={12}>
+          <Flex vertical gap={12}>
+            <Flex gap={6} wrap aria-label="可插入字段" role="group">
+              {Object.entries(TEMPLATE_PLACEHOLDERS).map(([field, label]) => (
+                <Button
+                  key={field}
+                  size="small"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertField(field)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </Flex>
+            <label>
+              反馈模板
+              <Input.TextArea
+                ref={editorRef}
+                value={customTemplate}
+                onChange={(e) => setCustomTemplate(e.target.value)}
+                onFocus={() => {
+                  wasEditorFocused.current = true;
+                }}
+                aria-invalid={issues.length > 0}
+                aria-describedby={issues.length ? issuesId : undefined}
+                placeholder="输入自定义模板"
+                rows={14}
+              />
+            </label>
+            {!!issues.length && (
+              <Alert
+                id={issuesId}
+                type="error"
+                showIcon
+                title={issues[0]}
+                description={issues.slice(1).map((issue) => (
+                  <div key={issue}>{issue}</div>
+                ))}
+              />
+            )}
+            <label>
+              自定义签名
+              <Input
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                placeholder="输入自定义签名"
+              />
+            </label>
+            <div>
+              <Button onClick={resetTemplate}>恢复默认模板</Button>
+            </div>
+          </Flex>
+        </Col>
+        <Col xs={24} md={12}>
+          <Flex vertical gap={12}>
+            <Flex align="center" gap={8} wrap justify="space-between">
+              <h3>家长预览</h3>
+              <Segmented
+                aria-label="预览格式"
+                value={format}
+                onChange={setFormat}
+                options={[
+                  { label: "纯文本", value: "plain", title: "" },
+                  { label: "Markdown", value: "markdown", title: "" },
+                ]}
+              />
+            </Flex>
+            <ContentTransition contentKey={format} direction="replace">
+              <Input.TextArea
+                aria-label="家长预览示例"
+                readOnly
+                variant="filled"
+                value={format === "plain" ? toPlainText(preview) : preview}
+                autoSize={{ minRows: 15, maxRows: 25 }}
+              />
+            </ContentTransition>
+          </Flex>
+        </Col>
+      </Row>
     </Modal>
   );
 };

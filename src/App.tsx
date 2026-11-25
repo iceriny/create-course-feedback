@@ -1,6 +1,12 @@
 import { useAppearanceStore } from "./store/appearanceStore";
 // React 核心
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useInsertionEffect,
+  useState,
+} from "react";
 
 // Ant Design 核心
 import { ConfigProvider, message, theme } from "antd";
@@ -29,9 +35,36 @@ const App: React.FC = () => {
     return () => media.removeEventListener("change", update);
   }, []);
   const dark = mode === "dark" || (mode === "system" && systemDark);
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  // Ant derives tokens for every mounted control when the palette changes.
+  // Let that render yield to input while keeping the last complete palette.
+  const palette = useDeferredValue(dark);
+  return <ThemedWorkbench dark={palette} />;
+};
+
+const ThemedWorkbench = React.memo(function ThemedWorkbench({
+  dark,
+}: {
+  dark: boolean;
+}) {
+  useInsertionEffect(() => {
+    const root = document.documentElement;
+    const palette = dark ? "dark" : "light";
+    if (root.dataset.theme === palette) return;
+    const switching = Boolean(root.dataset.theme);
+    if (switching) root.setAttribute("data-changing-palette", "");
+    root.dataset.theme = palette;
+    root.style.colorScheme = palette;
+    if (!switching) return;
+    // Restore ordinary control feedback after painting the new palette.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() =>
+        root.removeAttribute("data-changing-palette"),
+      );
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      root.removeAttribute("data-changing-palette");
+    };
   }, [dark]);
   const [messageApi, contextHolder] = message.useMessage();
   const sendInfo = useCallback(
@@ -58,9 +91,18 @@ const App: React.FC = () => {
   return (
     <ConfigProvider
       locale={zhCN}
+      wave={{ disabled: true }}
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
+          motionEaseOut: "var(--motion-settle)",
+          motionEaseOutCirc: "var(--motion-settle)",
+          motionEaseOutQuint: "var(--motion-settle)",
+          motionEaseOutBack: "var(--motion-spring)",
+          motionEaseInBack: "var(--motion-release)",
+          boxShadow: "var(--shadow-dialog)",
+          boxShadowSecondary: "var(--shadow-floating)",
+          boxShadowTertiary: "var(--shadow-surface)",
           colorPrimary: dark ? "#6ca8eb" : "#2563a6",
           colorBgContainer: dark ? "#182230" : "#ffffff",
           colorBgElevated: dark ? "#202c3c" : "#ffffff",
@@ -70,8 +112,10 @@ const App: React.FC = () => {
           colorText: dark ? "#dce6f2" : "#1c2c3e",
         },
         components: {
-          Layout: {
-            headerColor: "rgb(255, 255, 255)",
+          Button: {
+            defaultShadow: "var(--shadow-control)",
+            primaryShadow: "var(--shadow-control)",
+            dangerShadow: "var(--shadow-control)",
           },
         },
       }}
@@ -81,6 +125,6 @@ const App: React.FC = () => {
       <UpdateInfo />
     </ConfigProvider>
   );
-};
+});
 
 export default App;

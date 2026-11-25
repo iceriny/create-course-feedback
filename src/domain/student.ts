@@ -1,4 +1,8 @@
-import type { StudentBasicInfo, StudentsInfo } from "../types";
+import type {
+  StudentBasicInfo,
+  StudentContentPropsVersion,
+  StudentsInfo,
+} from "../types";
 
 export interface StructuredStudentPerformance {
   total?: string;
@@ -12,12 +16,52 @@ const normalizeText = (value: unknown): string => {
   return typeof value === "string" ? value : "";
 };
 
+export const DEFAULT_STUDENT_VERSION: StudentContentPropsVersion = "v1";
+export const observationFields = [
+  ["total", "整体表现"],
+  ["mastery_situation", "掌握情况"],
+  ["attention", "专注度"],
+  ["interaction", "互动"],
+  ["other", "其他观察"],
+] as const;
+
+export function hasObservation(student: StudentBasicInfo, info: StudentsInfo) {
+  const performance = info.performance ?? {};
+  return student.version === "v1"
+    ? Boolean(performance.brief?.trim())
+    : observationFields.some(([field]) => performance[field]?.trim());
+}
+
+export function withObservationFormat(
+  info: StudentsInfo,
+  version: StudentContentPropsVersion,
+) {
+  const performance = info.performance;
+  if (!performance) return performance;
+  const filledFields = observationFields.filter(([field]) =>
+    performance[field]?.trim(),
+  );
+  if (version === "v2" && !filledFields.length && performance.brief?.trim())
+    return { ...performance, total: performance.brief };
+  if (version === "v1" && !performance.brief?.trim() && filledFields.length) {
+    const brief = filledFields
+      .map(([field, label]) =>
+        field === "total"
+          ? performance[field]
+          : `${label}：${performance[field]}`,
+      )
+      .join("\n");
+    return { ...performance, brief };
+  }
+  return performance;
+}
+
 export const formatStructuredStudentPerformance = (
   gender: StudentBasicInfo["gender"],
   performance: StructuredStudentPerformance,
 ) => {
   return [
-    `性别:${gender}`,
+    ...(gender === "unspecified" ? [] : [`性别:${gender}`]),
     `整体表现:${normalizeText(performance.total)}`,
     `掌握情况:${normalizeText(performance.mastery_situation)}`,
     `专注度:${normalizeText(performance.attention)}`,
@@ -28,11 +72,12 @@ export const formatStructuredStudentPerformance = (
 
 export const createStudentsFromNames = (
   names: string[],
+  version: StudentContentPropsVersion = DEFAULT_STUDENT_VERSION,
 ): StudentBasicInfo[] => {
   return names.map((name) => ({
     name: name.trim(),
-    gender: "male",
-    version: "v2",
+    gender: "unspecified",
+    version,
   }));
 };
 
@@ -61,8 +106,11 @@ export const normalizeStoredStudents = (data: unknown): StudentBasicInfo[] => {
     .map((student) => ({
       ...(typeof student.id === "string" ? { id: student.id } : {}),
       name: student.name.trim(),
-      gender: student.gender === "female" ? "female" : "male",
-      version: student.version === "v1" ? "v1" : "v2",
+      gender:
+        student.gender === "male" || student.gender === "female"
+          ? student.gender
+          : "unspecified",
+      version: student.version === "v2" ? "v2" : DEFAULT_STUDENT_VERSION,
     }));
 };
 
@@ -97,8 +145,8 @@ export const mergeStudentNamesWithExistingInfo = (
     const existing = existingStudentsMap.get(name);
     return {
       name,
-      gender: existing?.gender || "male",
-      version: existing?.version || "v2",
+      gender: existing?.gender || "unspecified",
+      version: existing?.version || DEFAULT_STUDENT_VERSION,
     };
   });
 };

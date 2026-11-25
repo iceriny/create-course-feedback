@@ -42,6 +42,7 @@ const UpdateInfo: FC = () => {
   return (
     <Modal
       open={versionOpen}
+      afterClose={() => setVersionInfo([])}
       title={<span>已更新 当前版本: {version.getCurrentVersion()}</span>}
       onOk={handleOk}
       onCancel={handleOk}
@@ -51,7 +52,7 @@ const UpdateInfo: FC = () => {
         </Button>,
       ]}
     >
-      {versionOpen && (
+      {versionInfo.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {versionInfo.map((item: VersionInfo) => (
             <section key={item.version}>

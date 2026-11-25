@@ -2,12 +2,112 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>课程反馈生成器</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+      }
+      .startup-screen {
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        box-sizing: border-box;
+        min-block-size: 100vh;
+        min-block-size: 100svh;
+        padding: 24px;
+        background: light-dark(#f3f5f8, #101722);
+        color: light-dark(#1c2c3e, #dce6f2);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        text-align: center;
+      }
+      .startup-mark {
+        display: grid;
+        place-items: center;
+        inline-size: 88px;
+        block-size: 88px;
+        margin-block-end: 24px;
+        border-radius: 24px;
+        corner-shape: squircle;
+        background: light-dark(#fff, #182230);
+        box-shadow:
+          0 1px 2px #040c1814,
+          0 5px 14px -5px #040c181a,
+          0 16px 32px -18px #040c1840;
+      }
+      .startup-mark img {
+        display: block;
+      }
+      .startup-screen h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .startup-screen p {
+        margin: 8px 0 0;
+        color: light-dark(#64748b, #9bacbf);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .startup-screen a {
+        color: light-dark(#2563a6, #83b7f0);
+      }
+      .startup-error,
+      .startup-screen[data-failed] .startup-status {
+        display: none;
+      }
+      .startup-screen[data-failed] .startup-error {
+        display: block;
+      }
+    </style>
+    <script>
+      try {
+        const appearance = localStorage.getItem("appearance");
+        if (appearance === "light" || appearance === "dark") {
+          document.documentElement.style.colorScheme = appearance;
+        }
+      } catch {}
+    </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div id="startup-screen" class="startup-screen">
+        <div class="startup-mark">
+          <picture>
+            <source
+              media="(prefers-reduced-motion: reduce)"
+              srcset="%BASE_URL%logo.svg"
+            />
+            <img
+              id="startup-logo"
+              src="%BASE_URL%loading-logo.svg"
+              width="48"
+              height="48"
+              alt=""
+            />
+          </picture>
+        </div>
+        <h1>课程反馈生成器</h1>
+        <p class="startup-status" role="status">正在加载工作台</p>
+        <p class="startup-error" role="alert">
+          工作台加载失败。<a href="">重新加载</a>
+        </p>
+        <noscript>
+          <style>
+            .startup-status {
+              display: none;
+            }
+          </style>
+          <p>请启用 JavaScript 后重新加载。</p>
+        </noscript>
+      </div>
+    </div>
+    <script type="module" src="/src/startup.ts"></script>
   </body>
 </html>

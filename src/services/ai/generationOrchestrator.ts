@@ -159,6 +159,20 @@ export class GenerationOrchestrator {
     this.tasks.clear();
   }
 
+  cancelStudent(studentId: string) {
+    const task = this.tasks.get(studentId);
+    if (!task) return;
+    this.updateTask(task, {
+      loading: false,
+      draftContent: undefined,
+      generation: { status: "failed", errorMessage: "已取消生成。" },
+    });
+    task.controller.abort();
+    this.tasks.delete(studentId);
+    const index = this.queue.indexOf(task);
+    if (index >= 0) this.queue.splice(index, 1);
+  }
+
   private updateTask(
     task: GenerationTask,
     patch: Parameters<StudentInfoUpdater>[1],

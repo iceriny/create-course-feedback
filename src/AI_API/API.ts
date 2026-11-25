@@ -70,6 +70,7 @@ export class RequestError extends Error {
     message: string,
     public retryable = false,
     public retryAfterMs = 0,
+    public status?: number,
   ) {
     super(message);
   }
@@ -80,6 +81,19 @@ export interface RequestConfig {
   token: string;
   model: string;
 }
+
+const providerModelKey = (provider: ProviderType) => `ai-model:${provider}`;
+
+const readProviderModel = (provider: ProviderType): string | undefined => {
+  try {
+    const value: unknown = JSON.parse(
+      localStorage.getItem(providerModelKey(provider)) || "null",
+    );
+    return typeof value === "string" && value.trim() ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export async function readEventStream(
   response: Response,
@@ -133,14 +147,17 @@ class API {
   static hydrate() {
     try {
       const saved = localStorage.getItem("api_provider") as ProviderType;
-      if (saved in PROVIDERS) API.provider = saved;
+      if (Object.prototype.hasOwnProperty.call(PROVIDERS, saved))
+        API.provider = saved;
       const custom = localStorage.getItem("custom_provider_config");
       if (custom)
         API.customProviderConfig = {
           ...PROVIDERS.custom,
           ...JSON.parse(custom),
         };
-      API.model = API.getCurrentProviderConfig().defaultModel;
+      API.model =
+        readProviderModel(API.provider) ||
+        API.getCurrentProviderConfig().defaultModel;
       API.token =
         localStorage.getItem(`api_key:${API.provider}`) ||
         localStorage.getItem("api_key") ||
@@ -161,6 +178,58 @@ class API {
       model: API.model,
     };
   }
+  static getProviderSnapshot(provider: ProviderType): RequestConfig {
+    if (provider === API.provider) return API.snapshot();
+    const config =
+      provider === "custom" ? API.customProviderConfig : PROVIDERS[provider];
+    return {
+      provider,
+      config: { ...config },
+      token: localStorage.getItem(`api_key:${provider}`) || "",
+      model: readProviderModel(provider) || config.defaultModel,
+    };
+  }
+  static saveConfiguration(
+    { provider, config, token, model }: RequestConfig,
+    models: string[],
+  ) {
+    const changes = new Map<string, string>();
+    if (provider !== API.provider && API.model) {
+      changes.set(providerModelKey(API.provider), JSON.stringify(API.model));
+    }
+    if (provider === "custom") {
+      changes.set("custom_provider_config", JSON.stringify(config));
+    }
+    changes.set(`api_key:${provider}`, token);
+    changes.set(providerModelKey(provider), JSON.stringify(model));
+    changes.set("ai-model", JSON.stringify(model));
+    changes.set("api_provider", provider);
+
+    const previous = new Map(
+      Array.from(changes.keys(), (key) => [key, localStorage.getItem(key)]),
+    );
+    const written: string[] = [];
+    try {
+      for (const [key, value] of changes) {
+        localStorage.setItem(key, value);
+        written.push(key);
+      }
+    } catch (error) {
+      for (const key of written.reverse()) {
+        const oldValue = previous.get(key);
+        if (oldValue == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, oldValue);
+      }
+      throw error;
+    }
+
+    if (provider === "custom") API.customProviderConfig = { ...config };
+    API.provider = provider;
+    API.token = token;
+    API.model = model;
+    API.model_list = models;
+    API.modelListAvailable = models.length > 0;
+  }
   static setToken(token: string) {
     API.token = token.trim();
   }
@@ -180,7 +249,9 @@ class API {
   static setProvider(provider: ProviderType) {
     API.provider = provider;
     API.token = localStorage.getItem(`api_key:${provider}`) || "";
-    API.model = API.getCurrentProviderConfig().defaultModel;
+    API.model =
+      readProviderModel(provider) ||
+      API.getCurrentProviderConfig().defaultModel;
     API.model_list = [];
     API.modelListAvailable = false;
     localStorage.setItem("api_provider", provider);
@@ -218,33 +289,68 @@ class API {
   static isCustomModelAllowed() {
     return !API.modelListAvailable || API.model_list.length === 0;
   }
-  static async getModelList() {
-    const snapshot = API.snapshot();
+  static async fetchModelList(snapshot: RequestConfig, signal?: AbortSignal) {
     if (!snapshot.token || !snapshot.config.modelListUrl)
       throw new RequestError("请先填写密钥和服务地址。");
+    const timeout = AbortSignal.timeout(15000);
     const response = await fetch(snapshot.config.modelListUrl, {
       headers:
         snapshot.provider === "gemini"
           ? { "x-goog-api-key": snapshot.token }
           : { Authorization: `Bearer ${snapshot.token}` },
-      signal: AbortSignal.timeout(15000),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
     if (!response.ok)
       throw new RequestError(
         `连接失败（${response.status}），请检查密钥与服务地址。`,
+        false,
+        0,
+        response.status,
       );
     const body = await response.json();
-    const models: string[] =
-      snapshot.provider === "gemini"
-        ? (body.models || []).map((item: { name: string }) =>
-            item.name.replace(/^models\//, ""),
-          )
-        : (body.data || []).map((item: { id: string }) => item.id);
+    const gemini = snapshot.provider === "gemini";
+    const entries = gemini ? body?.models : body?.data;
+    if (!Array.isArray(entries)) return [];
+    const names = entries
+      .map((entry) => (gemini ? entry?.name : entry?.id))
+      .filter((name): name is string => typeof name === "string")
+      .map((name) => (gemini ? name.replace(/^models\//, "") : name).trim())
+      .filter(Boolean);
+    return [...new Set(names)];
+  }
+  static async getModelList() {
+    const snapshot = API.snapshot();
+    const models = await API.fetchModelList(snapshot);
     if (snapshot.provider === API.provider) {
       API.model_list = models;
       API.modelListAvailable = models.length > 0;
     }
     return models;
+  }
+  static async testConnection(snapshot: RequestConfig, signal?: AbortSignal) {
+    const receivedText = new AbortController();
+    const timeout = AbortSignal.timeout(15000);
+    const signals = [receivedText.signal, timeout];
+    if (signal) signals.push(signal);
+    try {
+      await API.request(
+        snapshot,
+        [
+          { role: "system", content: "请简短回复。" },
+          { role: "user", content: "请回复 OK。" },
+        ],
+        (content, type) => {
+          if (type === "content" && content.trim()) receivedText.abort();
+        },
+        AbortSignal.any(signals),
+      );
+    } catch (error) {
+      if (receivedText.signal.aborted) return;
+      if (timeout.aborted && !signal?.aborted) {
+        throw new RequestError("测试连接超时，请检查服务后重试。");
+      }
+      throw error;
+    }
   }
   async sendMessage(
     callback?: (content: string | null, type?: ContentType) => void,
@@ -316,6 +422,7 @@ class API {
             : `服务暂时不可用（${response.status}）。`,
           retryable,
           Number.isFinite(delay) ? delay : 0,
+          response.status,
         );
       }
       if (gemini) {

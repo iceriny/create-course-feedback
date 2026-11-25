@@ -1,0 +1,504 @@
+:root {
+  --shadow-ink: 24 44 70;
+  --shadow-strength: 1;
+  --shadow-level-1:
+    0 1px 1px rgb(var(--shadow-ink) / calc(0.07 * var(--shadow-strength))),
+    0 2px 3px -1px rgb(var(--shadow-ink) / calc(0.08 * var(--shadow-strength))),
+    0 4px 8px -5px rgb(var(--shadow-ink) / calc(0.13 * var(--shadow-strength)));
+  --shadow-level-2:
+    0 1px 2px rgb(var(--shadow-ink) / calc(0.08 * var(--shadow-strength))),
+    0 4px 9px -4px rgb(var(--shadow-ink) / calc(0.11 * var(--shadow-strength))),
+    0 10px 24px -14px
+      rgb(var(--shadow-ink) / calc(0.18 * var(--shadow-strength)));
+  --shadow-level-3:
+    0 1px 3px rgb(var(--shadow-ink) / calc(0.09 * var(--shadow-strength))),
+    0 6px 14px -5px rgb(var(--shadow-ink) / calc(0.14 * var(--shadow-strength))),
+    0 16px 36px -18px
+      rgb(var(--shadow-ink) / calc(0.23 * var(--shadow-strength)));
+  --shadow-level-4:
+    0 1px 3px rgb(var(--shadow-ink) / calc(0.1 * var(--shadow-strength))),
+    0 8px 20px -6px rgb(var(--shadow-ink) / calc(0.17 * var(--shadow-strength))),
+    0 23px 48px -20px
+      rgb(var(--shadow-ink) / calc(0.26 * var(--shadow-strength)));
+  --shadow-level-5:
+    0 2px 4px rgb(var(--shadow-ink) / calc(0.12 * var(--shadow-strength))),
+    0 10px 26px -6px
+      rgb(var(--shadow-ink) / calc(0.21 * var(--shadow-strength))),
+    0 29px 66px -20px
+      rgb(var(--shadow-ink) / calc(0.3 * var(--shadow-strength)));
+  --shadow-control: var(--shadow-level-1);
+  --shadow-surface: var(--shadow-level-2);
+  --shadow-dock: var(--shadow-level-3);
+  --shadow-floating: var(--shadow-level-4);
+  --shadow-dialog: var(--shadow-level-5);
+  --radius-surface: 16px;
+  --radius-control: 8px;
+  --radius-inset: 6px;
+}
+:root[data-theme="dark"] {
+  --shadow-ink: 0 4 12;
+  --shadow-strength: 2.35;
+}
+
+/* A palette change is one paint. Preserve the spatial transitions of open
+   panels and the appearance icon instead of tweening every input and border. */
+:root[data-changing-palette]
+  :is(
+    .ant-btn,
+    .ant-input,
+    .ant-input-affix-wrapper,
+    .ant-input-clear-icon,
+    .ant-select,
+    .ant-tag,
+    .ant-picker,
+    .ant-picker *,
+    .ant-checkbox,
+    .ant-segmented,
+    .ant-segmented-item,
+    .ant-pagination li,
+    .ant-pagination a,
+    .ant-pagination-item-link,
+    .ant-dropdown-menu-item,
+    .save-status,
+    .feedback-status-light,
+    .observation-label > span,
+    .feedback-body
+  ),
+:root[data-changing-palette]
+  :is(.workbench-toolbar, .ant-checkbox, .feedback-status-light)::before,
+:root[data-changing-palette]
+  :is(.ant-checkbox, .ant-dropdown-menu-item)::after {
+  transition-property: opacity, transform, translate, rotate, scale !important;
+}
+
+/* Preserve rc-motion's completion events and the mounted editor when the OS
+   preference changes while a field or dialog has focus. */
+@media (prefers-reduced-motion: reduce) {
+  :where([class^="ant-"], [class*=" ant-"]),
+  :where([class^="ant-"], [class*=" ant-"])::before,
+  :where([class^="ant-"], [class*=" ant-"])::after {
+    animation-delay: 0s !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-delay: 0s !important;
+    transition-duration: 1ms !important;
+  }
+  :is(
+    .ant-popover,
+    .ant-tooltip,
+    .ant-select-dropdown,
+    .ant-picker-dropdown,
+    .ant-dropdown
+  ) {
+    transition-property: opacity !important;
+  }
+}
+.workspace :is(.course-panel, .student-editor, .roster-panel, .welcome-panel) {
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-surface);
+}
+.workspace .action-bar {
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-dock);
+}
+.workspace .student-card-anchor,
+.ant-modal .ant-modal-container {
+  border-radius: var(--radius-surface);
+}
+.line-navigator-ruler {
+  box-shadow: var(--shadow-floating);
+}
+.ant-drawer > .ant-drawer-content-wrapper,
+.ant-drawer .ant-drawer-section {
+  border-radius: var(--drawer-radius, 0);
+  corner-shape: squircle;
+}
+.ant-drawer-right {
+  --drawer-radius: var(--radius-surface) 0 0 var(--radius-surface);
+}
+.ant-drawer-left {
+  --drawer-radius: 0 var(--radius-surface) var(--radius-surface) 0;
+}
+.ant-drawer-top {
+  --drawer-radius: 0 0 var(--radius-surface) var(--radius-surface);
+}
+.ant-drawer-bottom {
+  --drawer-radius: var(--radius-surface) var(--radius-surface) 0 0;
+}
+.ant-drawer.ant-drawer > .ant-drawer-content-wrapper {
+  box-shadow: var(--shadow-dialog);
+}
+.ant-select-dropdown.ant-select-dropdown {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.ant-select-dropdown > div {
+  padding: 4px;
+  background: var(--ant-color-bg-elevated);
+  border-radius: inherit;
+  corner-shape: squircle;
+  box-shadow: var(--shadow-floating);
+}
+:is(
+  .ant-popover-arrow,
+  .ant-tooltip-arrow,
+  .ant-picker-range-arrow,
+  .ant-dropdown-arrow
+)::after {
+  box-shadow: none !important;
+}
+.ant-btn:is(.ant-btn-default, .ant-btn-primary, .ant-btn-dashed):not(
+    :disabled
+  ):hover {
+  box-shadow: var(--shadow-surface);
+}
+.ant-btn:is(.ant-btn-default, .ant-btn-primary, .ant-btn-dashed):not(
+    :disabled
+  ):active {
+  box-shadow: none;
+}
+.workbench {
+  position: relative;
+}
+.workbench-threshold {
+  position: absolute;
+  inset: -1px auto auto 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+@media (min-width: 701px) {
+  .workbench-toolbar {
+    padding-inline: 12px;
+  }
+  .workbench-toolbar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--ant-color-bg-layout);
+    border-radius: 12px;
+    corner-shape: squircle;
+    box-shadow: var(--shadow-surface);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .workbench[data-docked] .workbench-toolbar {
+    background: transparent;
+  }
+  .workbench[data-docked] .workbench-toolbar::before {
+    opacity: 1;
+    box-shadow: var(--shadow-dock);
+  }
+}
+:is(
+  .ant-card,
+  .student-card-anchor,
+  .welcome-panel,
+  .roster-panel,
+  .action-bar,
+  .ant-modal-container,
+  .ant-popover-container,
+  .ant-tooltip-container,
+  .ant-picker-panel-container,
+  .ant-select-dropdown,
+  .ant-dropdown-menu,
+  .ant-btn:not(.ant-btn-circle, .ant-btn-round),
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select,
+  .ant-select-item-option,
+  .ant-picker,
+  .ant-segmented,
+  .ant-segmented-item,
+  .ant-segmented-thumb,
+  .roster-item,
+  .roster-selection-marker,
+  .line-navigator,
+  .line-navigator-ruler,
+  .viewport-preview-preferences > span,
+  .viewport-preview-form i
+) {
+  corner-shape: squircle;
+}
+
+.editor-stage {
+  position: relative;
+  isolation: isolate;
+}
+.lesson-surface {
+  interpolate-size: allow-keywords;
+}
+.lesson-surface > * {
+  interpolate-size: numeric-only;
+}
+.lesson-surface[data-resizing] {
+  overflow: clip;
+  overflow-clip-margin: 12px;
+}
+.editor-stage[data-moving] {
+  overflow: clip;
+  overflow-clip-margin: 8px;
+  overflow-anchor: none;
+}
+.editor-stage > .student-card-anchor {
+  position: relative;
+  isolation: isolate;
+  align-self: start;
+}
+.editor-stage > [data-retiring] {
+  position: absolute;
+  inset: 0 auto auto 0;
+  pointer-events: none;
+}
+.editor-stage > [hidden] {
+  display: none;
+}
+/* The sheet owns the layout transition. Ant's transition: all would also
+   interpolate each fixed textarea's height and max-height on the main thread. */
+.student-editor .fixed-text-editor textarea.ant-input {
+  transition-property: border-color, background-color, color, box-shadow;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .editor-stage > [data-current-editor="true"],
+  .editor-stage > [data-current-editor="true"] > .editor-backplate {
+    will-change: transform;
+  }
+}
+.editor-stage[data-moving] > [data-current-editor="true"] {
+  z-index: 1;
+}
+.editor-empty {
+  position: relative;
+  background: var(--ant-color-bg-layout);
+}
+.editor-backplate {
+  position: absolute;
+  inset: 0;
+  contain: layout style;
+  z-index: -1;
+  pointer-events: none;
+  transform-origin: top left;
+  border-radius: var(--radius-surface);
+  corner-shape: squircle;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
+}
+.workspace .editor-stage :is(.student-editor, .viewport-editor-placeholder) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .workbench-toolbar::before {
+    transition:
+      opacity var(--motion-base) var(--motion-settle),
+      box-shadow var(--motion-base) var(--motion-settle);
+  }
+  .appearance-icon {
+    display: inline-flex;
+    animation: appearance-change var(--motion-base) var(--motion-spring);
+  }
+  @keyframes appearance-change {
+    from {
+      opacity: 0.5;
+      transform: rotate(-12deg) scale(0.85);
+    }
+  }
+  .workspace-heading h1,
+  .course-panel > .ant-card-body,
+  .welcome-panel {
+    animation: workbench-arrive var(--motion-base) var(--motion-settle)
+      backwards;
+  }
+  @keyframes workbench-arrive {
+    from {
+      opacity: 0.45;
+      translate: 0 7px;
+    }
+  }
+
+  .ant-btn:not(:disabled) {
+    transition:
+      scale var(--motion-base) var(--motion-spring),
+      background-color var(--motion-fast) var(--motion-settle),
+      border-color var(--motion-fast) var(--motion-settle),
+      color var(--motion-fast) var(--motion-settle),
+      box-shadow var(--motion-fast) var(--motion-settle);
+  }
+  .ant-btn:not(:disabled):active {
+    scale: 0.965;
+    transition-duration: 70ms;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ant-modal-root .ant-modal {
+    --overlay-closed-y: 9px;
+    --overlay-closed-scale: 0.975;
+    --overlay-duration: var(--motion-travel);
+    transform-origin: 50% 38% !important;
+  }
+
+  .ant-drawer-right > .ant-drawer-content-wrapper {
+    --overlay-closed-x: calc(100% + 24px);
+  }
+  .ant-drawer-left > .ant-drawer-content-wrapper {
+    --overlay-closed-x: calc(-100% - 24px);
+  }
+  .ant-drawer-bottom > .ant-drawer-content-wrapper {
+    --overlay-closed-y: calc(100% + 44px);
+  }
+  .ant-drawer-top > .ant-drawer-content-wrapper {
+    --overlay-closed-y: calc(-100% - 60px);
+  }
+  .ant-drawer > .ant-drawer-content-wrapper {
+    --overlay-closed-opacity: 1;
+    --overlay-duration: var(--motion-travel);
+  }
+
+  :is(
+    .ant-popover,
+    .ant-tooltip,
+    .ant-select-dropdown,
+    .ant-picker-dropdown,
+    .ant-dropdown
+  ) {
+    --overlay-closed-y: -7px;
+    --overlay-closed-scale: 0.98;
+    --popup-origin: var(--arrow-x, 50%) 0%;
+    --overlay-shell-translate: none;
+    --overlay-shell-scale: none;
+
+    &[class*="-placement-top"] {
+      --overlay-closed-y: 7px;
+      --popup-origin: var(--arrow-x, 50%) 100%;
+    }
+    &[class*="-placement-left"] {
+      --overlay-closed-x: 7px;
+      --overlay-closed-y: 0px;
+      --popup-origin: 100% var(--arrow-y, 50%);
+    }
+    &[class*="-placement-right"] {
+      --overlay-closed-x: -7px;
+      --overlay-closed-y: 0px;
+      --popup-origin: 0% var(--arrow-y, 50%);
+    }
+  }
+
+  /* Keep the same live properties across rc-motion's enter and leave steps,
+     so the browser can reverse them from the current composited pose. */
+  :is(
+    .ant-modal-root .ant-modal,
+    .ant-modal-root .ant-modal-mask,
+    .ant-drawer > .ant-drawer-content-wrapper,
+    .ant-drawer > .ant-drawer-mask,
+    .ant-popover,
+    .ant-tooltip,
+    .ant-select-dropdown,
+    .ant-picker-dropdown,
+    .ant-dropdown
+  ) {
+    --overlay-time: var(--overlay-duration, var(--motion-base));
+    --overlay-ease: var(--motion-settle);
+    --overlay-opacity: 1;
+    --overlay-x: 0px;
+    --overlay-y: 0px;
+    --overlay-scale: 1;
+    opacity: var(--overlay-opacity) !important;
+    translate: var(
+      --overlay-shell-translate,
+      var(--overlay-x) var(--overlay-y)
+    );
+    scale: var(--overlay-shell-scale, var(--overlay-scale));
+    transition:
+      opacity var(--overlay-time) var(--overlay-ease),
+      translate var(--overlay-time) var(--overlay-ease),
+      scale var(--overlay-time) var(--overlay-ease) !important;
+
+    &[class*="-leave"] {
+      --overlay-opacity: var(--overlay-closed-opacity, 0);
+      --overlay-x: var(--overlay-closed-x, 0px);
+      --overlay-y: var(--overlay-closed-y, 0px);
+      --overlay-scale: var(--overlay-closed-scale, 1);
+      --overlay-time: var(--motion-exit);
+      --overlay-ease: var(--motion-release);
+    }
+    &:is([class*="-enter"], [class*="-appear"], [class*="-leave"]) {
+      transform: none;
+      animation: none !important;
+    }
+    &:is(
+      [class*="-enter-active"],
+      [class*="-appear-active"],
+      [class*="-leave-active"]
+    ) {
+      /* The library needs a completion event even when no visual property changed. */
+      animation: overlay-motion-clock var(--overlay-time) linear !important;
+    }
+    @starting-style {
+      --overlay-opacity: var(--overlay-closed-opacity, 0);
+    }
+  }
+  /* Keep the positioning shell still while its surface and arrow move. */
+  :is(
+    .ant-popover-container,
+    .ant-tooltip-container,
+    .ant-picker-panel-container,
+    .ant-dropdown-menu,
+    .ant-select-dropdown > div
+  ) {
+    transform-origin: var(--popup-origin, 50% 0%);
+    translate: var(--overlay-x, 0px) var(--overlay-y, 0px);
+    scale: var(--overlay-scale, 1);
+    transition:
+      translate var(--overlay-time, var(--motion-base))
+        var(--overlay-ease, var(--motion-settle)),
+      scale var(--overlay-time, var(--motion-base))
+        var(--overlay-ease, var(--motion-settle));
+  }
+  :is(
+    .ant-popover-arrow,
+    .ant-tooltip-arrow,
+    .ant-picker-range-arrow,
+    .ant-dropdown-arrow
+  ) {
+    translate: var(--overlay-x, 0px) var(--overlay-y, 0px);
+    transition: translate var(--overlay-time, var(--motion-base))
+      var(--overlay-ease, var(--motion-settle));
+  }
+  @starting-style {
+    :is(
+      .ant-modal-root .ant-modal,
+      .ant-drawer > .ant-drawer-content-wrapper,
+      .ant-popover-container,
+      .ant-tooltip-container,
+      .ant-picker-panel-container,
+      .ant-dropdown-menu,
+      .ant-select-dropdown > div
+    ) {
+      translate: var(--overlay-closed-x, 0px) var(--overlay-closed-y, 0px);
+      scale: var(--overlay-closed-scale, 1);
+    }
+    :is(
+      .ant-popover-arrow,
+      .ant-tooltip-arrow,
+      .ant-picker-range-arrow,
+      .ant-dropdown-arrow
+    ) {
+      translate: var(--overlay-closed-x, 0px) var(--overlay-closed-y, 0px);
+    }
+  }
+  @keyframes overlay-motion-clock {
+    from {
+      --overlay-clock: 0;
+    }
+    to {
+      --overlay-clock: 1;
+    }
+  }
+}

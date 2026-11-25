@@ -1,4 +1,6 @@
-import { isLessonDraft } from "../../domain/lesson";
+import { isLessonDraft, type LessonDraft } from "../../domain/lesson";
+import { createLessonBackup } from "./lessonRepository";
+import { readStorageJson } from "./localStorageRepository";
 import { db } from "../../db/db";
 export interface Backup {
   version: 1;
@@ -54,7 +56,23 @@ export function parseBackup(text: string): Backup {
     indexed,
   };
 }
-export async function createBackup(): Promise<Backup> {
+function mergeClassNames(local: Record<string, string>, existing: unknown) {
+  if (!("class-name" in local)) return local;
+  const imported: unknown = JSON.parse(local["class-name"]);
+  if (!Array.isArray(imported)) throw new Error("备份的班级列表格式不正确。");
+  const names: unknown[] = [
+    ...(Array.isArray(existing) ? existing : []),
+    ...imported,
+  ];
+  return {
+    ...local,
+    "class-name": JSON.stringify([
+      ...new Set(names.filter((name) => typeof name === "string")),
+    ]),
+  };
+}
+
+export async function createBackup(draft?: LessonDraft): Promise<Backup> {
   const local = Object.fromEntries(
     Array.from(
       { length: localStorage.length },
@@ -68,15 +86,31 @@ export async function createBackup(): Promise<Backup> {
   const indexed = Object.fromEntries(
     (await db.storage.toArray()).map((item) => [item.key, item.value]),
   );
-  return { version: 1, local, indexed };
+  return {
+    version: 1,
+    local: draft
+      ? {
+          ...local,
+          ...mergeClassNames(
+            createLessonBackup(draft).local,
+            readStorageJson("class-name", []),
+          ),
+        }
+      : local,
+    indexed,
+  };
 }
 export async function restoreBackup(backup: Backup) {
+  const local = mergeClassNames(
+    backup.local,
+    readStorageJson("class-name", []),
+  );
   const before = new Map(
-    Object.keys(backup.local).map((key) => [key, localStorage.getItem(key)]),
+    Object.keys(local).map((key) => [key, localStorage.getItem(key)]),
   );
   try {
     await db.transaction("rw", db.storage, async () => {
-      for (const [key, value] of Object.entries(backup.local))
+      for (const [key, value] of Object.entries(local))
         localStorage.setItem(key, value);
       await db.storage.bulkPut(
         Object.entries(backup.indexed).map(([key, value]) => ({ key, value })),

@@ -35,10 +35,10 @@ beforeEach(() => {
     objectives: "Practice",
   });
   store.updateStudentInfo(0, {
-    performance: { total: "Zoe observation" },
+    performance: { brief: "Zoe observation" },
     content: "Original Zoe draft",
   });
-  store.updateStudentInfo(1, { performance: { total: "Amy observation" } });
+  store.updateStudentInfo(1, { performance: { brief: "Amy observation" } });
 });
 afterEach(() => {
   cancelGeneration();
@@ -51,7 +51,7 @@ describe("generation with changing roster", () => {
   it("deduplicates requests and writes to the same student after sorting", async () => {
     expect(generateFeedback([0])).toBe(1);
     expect(generateFeedback([0])).toBe(0);
-    useRosterStore.getState().sortStudentsByName("A");
+    useRosterStore.getState().sortStudentsByName();
     streams[0].onContent(
       "Zoe 能够认真完成循环练习，并主动检查程序结果。",
       "content",
@@ -82,6 +82,40 @@ describe("generation with changing roster", () => {
     expect(useRosterStore.getState().studentsInfo[0]).toMatchObject({
       content: "Original Zoe draft",
       loading: false,
+    });
+  });
+  it("lets a running batch finish after a course edit while requiring updated feedback", async () => {
+    const store = useRosterStore.getState();
+    expect(generateFeedback([0, 1])).toBe(2);
+    store.setCourse({ name: "Loops and conditions" });
+    expect(useRosterStore.getState().studentsInfo[0].loading).toBe(true);
+    for (const stream of streams) {
+      stream.onContent("能够完成循环练习，并主动检查程序结果。", "content");
+      stream.finish();
+    }
+    await settle();
+    expect(useRosterStore.getState().studentsInfo[0]).toMatchObject({
+      content: "Original Zoe draft",
+      feedbackNeedsUpdate: "course",
+      loading: false,
+    });
+    expect(useRosterStore.getState().studentsInfo[1]).toMatchObject({
+      content: "能够完成循环练习，并主动检查程序结果。",
+      feedbackNeedsUpdate: "course",
+      loading: false,
+    });
+
+    expect(generateFeedback([0])).toBe(1);
+    streams[2].onContent(
+      "能完成循环和条件练习，并指出何时退出循环。",
+      "content",
+    );
+    streams[2].finish();
+    await settle();
+    expect(useRosterStore.getState().studentsInfo[0]).toMatchObject({
+      previousContent: "Original Zoe draft",
+      previousFeedbackNeedsUpdate: "course",
+      feedbackNeedsUpdate: undefined,
     });
   });
 });

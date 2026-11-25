@@ -1,0 +1,44 @@
+.motion-disclosure {
+  position: relative;
+}
+.course-slot {
+  contain: layout style;
+  overflow-anchor: none;
+}
+
+.motion-disclosure[data-moving] {
+  overflow: clip;
+}
+
+.motion-disclosure-panel {
+  display: flow-root;
+  opacity: 1;
+  transition:
+    opacity var(--motion-fast, 140ms) var(--motion-settle, ease-out),
+    translate var(--motion-fast, 140ms) var(--motion-settle, ease-out);
+}
+
+.motion-disclosure-panel[hidden] {
+  display: none;
+}
+
+.motion-disclosure-panel[data-active="false"] {
+  position: absolute;
+  inset: 0 0 auto;
+  opacity: 0;
+  translate: 0 -5px;
+}
+
+@starting-style {
+  .motion-disclosure[data-switching="true"]
+    > .motion-disclosure-panel[data-active="true"] {
+    opacity: 0;
+    translate: 0 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-disclosure-panel {
+    transition: none;
+  }
+}

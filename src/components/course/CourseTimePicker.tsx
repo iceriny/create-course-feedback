@@ -1,5 +1,11 @@
-import { useEffect, useState } from "react";
-import { Button, DatePicker, Flex, Popover, message } from "antd";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Button, DatePicker, Flex, Popover, Tooltip, message } from "antd";
 import dayjs from "dayjs";
 import {
   applyClassTime,
@@ -7,22 +13,71 @@ import {
   type ClassTime,
 } from "../../domain/classTime";
 import { useRosterStore } from "../../store/rosterStore";
-import { cancelGeneration } from "../../services/ai/workspaceGeneration";
-export default function CourseTimePicker() {
+
+function CalendarPanel({ children }: { children: ReactNode }) {
+  const panel = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const root = panel.current!;
+    // The picker sets titles on the table cells outside its cellRender slot.
+    const removeTitles = () => {
+      for (const cell of root.querySelectorAll("td[title]")) {
+        cell.setAttribute("aria-label", cell.getAttribute("title")!);
+        cell.removeAttribute("title");
+      }
+    };
+    removeTitles();
+    const observer = new MutationObserver(removeTitles);
+    observer.observe(root, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ["title"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={panel}>{children}</div>;
+}
+
+const dateCellFormats = { date: "YYYY-MM-DD", month: "YYYY-MM" };
+
+export default function CourseTimePicker({ active }: { active: boolean }) {
   const name = useRosterStore((s) => s.activeClass);
   const course = useRosterStore((s) => s.course);
   const [slots, setSlots] = useState(() => readClassTimes(name));
   const [notice, holder] = message.useMessage();
+  const picker = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = picker.current;
+    if (
+      active &&
+      container &&
+      container.parentElement === document.activeElement
+    ) {
+      container.querySelector("input")?.focus();
+    }
+  }, [active]);
   const change = (patch: { start: string; end: string }) => {
-    cancelGeneration();
     useRosterStore.getState().setCourse(patch);
   };
   useEffect(() => {
+    if (!active) return;
     const state = useRosterStore.getState();
     const defaults = readClassTimes(state.activeClass);
+    setSlots((previous) =>
+      previous.length === defaults.length &&
+      previous.every(
+        (slot, i) =>
+          slot.start === defaults[i].start &&
+          slot.end === defaults[i].end &&
+          slot.days === defaults[i].days,
+      )
+        ? previous
+        : defaults,
+    );
     if (!state.course.start && !state.course.end && defaults[0])
       state.setCourse(applyClassTime(defaults[0]));
-  }, []);
+  }, [active]);
   const save = (next: ClassTime[]) => {
     try {
       localStorage.setItem(`classTimes:${name}`, JSON.stringify(next));
@@ -31,44 +86,39 @@ export default function CourseTimePicker() {
       void notice.error("常用时间保存失败，请重试。");
     }
   };
-  const shortcuts = (
-    <Flex className="time-shortcuts" gap={8} wrap>
-      {[
-        [-1, "昨天"],
-        [-7, "上周"],
-        [0, "本日"],
-      ].map(([offset, label]) => (
-        <Button
-          key={label}
-          size="small"
-          type="text"
-          autoInsertSpace={false}
-          onClick={() => {
-            const start = course.start
-              ? dayjs(course.start)
-              : dayjs().startOf("day").hour(8);
-            const end = course.end
-              ? dayjs(course.end)
-              : start.add(110, "minute");
-            const delta =
-              offset === 0
-                ? dayjs().startOf("day").diff(start.startOf("day"), "day")
-                : Number(offset);
-            change({
-              start: start.add(delta, "day").toISOString(),
-              end: end.add(delta, "day").toISOString(),
-            });
-          }}
-        >
-          {label}
-        </Button>
-      ))}
-    </Flex>
-  );
+  const shortcuts = [
+    [-1, "昨天"],
+    [-7, "上周"],
+    [0, "本日"],
+  ].map(([offset, label]) => (
+    <Button
+      key={label}
+      size="small"
+      type="text"
+      autoInsertSpace={false}
+      onClick={() => {
+        const start = course.start
+          ? dayjs(course.start)
+          : dayjs().startOf("day").hour(8);
+        const end = course.end ? dayjs(course.end) : start.add(110, "minute");
+        const delta =
+          offset === 0
+            ? dayjs().startOf("day").diff(start.startOf("day"), "day")
+            : Number(offset);
+        change({
+          start: start.add(delta, "day").toISOString(),
+          end: end.add(delta, "day").toISOString(),
+        });
+      }}
+    >
+      {label}
+    </Button>
+  ));
   return (
-    <div className="course-time-picker">
+    <div className="course-time-picker" ref={picker}>
       {holder}
       <DatePicker.RangePicker
+        variant="filled"
         aria-label="授课时间"
         popupAlign={{
           overflow: {
@@ -79,6 +129,17 @@ export default function CourseTimePicker() {
           },
         }}
         classNames={{ popup: { root: "course-time-popup" } }}
+        panelRender={(panel) => <CalendarPanel>{panel}</CalendarPanel>}
+        cellRender={(value, { originNode, type }) => {
+          if ((type === "date" || type === "month") && dayjs.isDayjs(value)) {
+            return (
+              <Tooltip title={value.format(dateCellFormats[type])}>
+                {originNode}
+              </Tooltip>
+            );
+          }
+          return originNode;
+        }}
         value={
           course.start && course.end
             ? [dayjs(course.start), dayjs(course.end)]
@@ -95,10 +156,12 @@ export default function CourseTimePicker() {
           })
         }
         renderExtraFooter={() => (
-          <div className="time-picker-footer">{shortcuts}</div>
+          <Flex className="time-picker-footer time-shortcuts" gap={8} wrap>
+            {shortcuts}
+          </Flex>
         )}
       />
-      <Flex gap={8} wrap>
+      <Flex className="time-shortcuts" align="center" gap={8} wrap>
         {shortcuts}
         <Popover
           trigger="click"
@@ -179,7 +242,7 @@ export default function CourseTimePicker() {
             </div>
           }
         >
-          <Button size="small">
+          <Button type="text" size="small" autoInsertSpace={false}>
             常用时间{slots[0] ? ` · ${slots[0].start}–${slots[0].end}` : ""}
           </Button>
         </Popover>

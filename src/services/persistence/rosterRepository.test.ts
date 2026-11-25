@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { KeyValueStorage } from "./localStorageRepository";
-import {
-  readStorageString,
-  writeStorageJson,
-} from "./localStorageRepository";
+import { readStorageString, writeStorageJson } from "./localStorageRepository";
 import {
   getRosterStorageKey,
   readRosterStudents,
@@ -40,7 +37,7 @@ describe("roster repository", () => {
     writeStorageJson(getRosterStorageKey("cpp0608"), [" 张三 "], storage);
 
     expect(readRosterStudents("cpp0608", storage)).toEqual([
-      { name: "张三", gender: "male", version: "v2" },
+      { name: "张三", gender: "unspecified", version: "v1" },
     ]);
 
     writeRosterStudents(

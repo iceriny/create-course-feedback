@@ -1,93 +1,163 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Checkbox, Input, Select } from "antd";
+import { Checkbox, Flex, Input } from "antd";
+import Select from "../common/Select";
+import { memo, useMemo } from "react";
 import { useRosterStore } from "../../store/rosterStore";
-import { statusLabel } from "../../domain/feedbackStatus";
-type Filter = "all" | "pending" | "failed" | "confirmed";
+import { statusLabel, type FeedbackStatus } from "../../domain/feedbackStatus";
+import type { StudentBasicInfo } from "../../types";
+import FeedbackStatusLight from "./FeedbackStatusLight";
+import RosterMotionList from "./RosterMotionList";
 
-export default function Roster({
+type Filter = FeedbackStatus | "all" | "uncopied";
+
+function participation(
+  student: StudentBasicInfo,
+  index: number,
+  status: FeedbackStatus,
+  touch = false,
+) {
+  return (
+    <Checkbox
+      aria-label={`本次参与 ${student.name}`}
+      checked={status !== "inactive"}
+      onChange={() => useRosterStore.getState().toggleStudentActivation(index)}
+    >
+      {touch ? "参与" : undefined}
+    </Checkbox>
+  );
+}
+
+const RosterRow = memo(function RosterRow({
+  student,
+  index,
+  status,
   selected,
   onSelect,
 }: {
-  selected: string;
+  student: StudentBasicInfo;
+  index: number;
+  status: FeedbackStatus;
+  selected: boolean;
   onSelect: (id: string) => void;
 }) {
-  const students = useRosterStore((s) => s.studentsList);
-  const summary = useRosterStore((s) =>
-    s.studentsList
-      .map(
-        (_, i) =>
-          `${statusLabel(s.studentsInfo[i])}:${s.studentsInfo[i]?.activated}`,
-      )
-      .join("|"),
+  return (
+    <div data-roster-row={student.id} className="roster-item">
+      {participation(student, index, status)}
+      <button
+        type="button"
+        className="roster-student"
+        aria-current={selected ? "true" : undefined}
+        aria-description={statusLabel(status)}
+        onClick={() => onSelect(student.id!)}
+      >
+        <span className="roster-name">{student.name}</span>
+        <FeedbackStatusLight status={status} />
+      </button>
+    </div>
   );
-  const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
-  const statuses = summary.split("|");
-  const listRef = useRef<HTMLDivElement>(null);
-  const selectedRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const list = listRef.current,
-      item = selectedRef.current;
-    if (!list || !item) return;
-    const box = list.getBoundingClientRect(),
-      row = item.getBoundingClientRect();
-    if (row.top < box.top) list.scrollTop += row.top - box.top;
-    else if (row.bottom > box.bottom) list.scrollTop += row.bottom - box.bottom;
-  }, [selected, search, filter]);
+});
+
+export default memo(function Roster({
+  entries,
+  selected,
+  onSelect,
+  search,
+  setSearch,
+  filter,
+  setFilter,
+}: {
+  entries: {
+    student: StudentBasicInfo;
+    index: number;
+    status: FeedbackStatus;
+  }[];
+  selected: string;
+  onSelect: (id: string) => void;
+  search: string;
+  setSearch: (value: string) => void;
+  filter: Filter;
+  setFilter: (value: Filter) => void;
+}) {
+  const entryOrder = JSON.stringify(entries.map(({ student }) => student.id));
+  const selectedEntry = entries.find((entry) => entry.student.id === selected);
+  const options = useMemo(
+    () =>
+      entries.map(({ student, status }) => ({
+        value: student.id!,
+        label: `${student.name} · ${statusLabel(status)}`,
+      })),
+    [entries],
+  );
   return (
     <>
       <Input
+        variant="filled"
+        className="roster-search"
         aria-label="查找学生"
         placeholder="查找学生"
         allowClear
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <Select
-        aria-label="筛选学生"
-        value={filter}
-        onChange={setFilter}
-        options={[
-          { value: "all", label: "全部学生" },
-          { value: "pending", label: "待确认" },
-          { value: "failed", label: "需重试" },
-          { value: "confirmed", label: "已确认" },
-        ]}
-      />
-      <div className="roster-items" ref={listRef}>
-        {students.map((s, index) => {
-          const [label, activated] = statuses[index].split(":");
-          if (
-            !s.name.toLowerCase().includes(search.toLowerCase()) ||
-            (filter === "pending" && label === "已确认") ||
-            (filter === "failed" && label !== "需重试") ||
-            (filter === "confirmed" && label !== "已确认")
-          )
-            return null;
-          return (
-            <div
-              key={s.id}
-              ref={s.id === selected ? selectedRef : undefined}
-              className={`roster-item ${s.id === selected ? "selected" : ""}`}
-            >
-              <Checkbox
-                aria-label={`本次生成 ${s.name}`}
-                checked={activated === "true"}
-                onChange={() =>
-                  useRosterStore.getState().toggleStudentActivation(index)
-                }
-              />
-              <button
-                aria-current={s.id === selected ? "true" : undefined}
-                onClick={() => onSelect(s.id!)}
-              >
-                <span>{s.name}</span>
-                <small>{label}</small>
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <Flex className="roster-selectors" gap={8}>
+        <Select
+          variant="filled"
+          className="roster-mobile-picker"
+          aria-label="查找或切换学生"
+          placeholder="查找或切换学生"
+          showSearch={{ optionFilterProp: "label" }}
+          value={selectedEntry ? selected : undefined}
+          onChange={(id) => onSelect(id)}
+          options={options}
+        />
+        <Select
+          variant="filled"
+          className="roster-filter"
+          aria-label="筛选学生"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: "全部学生" },
+            ...(
+              [
+                "unrecorded",
+                "recorded",
+                "ready",
+                "needs_update",
+                "failed",
+                "confirmed",
+                "inactive",
+              ] as const
+            ).map((value) => ({ value, label: statusLabel(value) })),
+            { value: "uncopied", label: "已确认 · 未复制" },
+          ]}
+        />
+        <span className="roster-mobile-participation">
+          {selectedEntry &&
+            participation(
+              selectedEntry.student,
+              selectedEntry.index,
+              selectedEntry.status,
+              true,
+            )}
+        </span>
+      </Flex>
+      <RosterMotionList
+        className="roster-items"
+        order={entryOrder}
+        search={search}
+        selected={selected}
+      >
+        {entries.map(({ student, index, status }) => (
+          <RosterRow
+            key={student.id}
+            student={student}
+            index={index}
+            status={status}
+            selected={student.id === selected}
+            onSelect={onSelect}
+          />
+        ))}
+      </RosterMotionList>
     </>
   );
-}
+});

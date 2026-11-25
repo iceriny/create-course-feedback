@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import type { LessonCourse } from "./lesson";
 
 export type CourseListItem = { item: string };
 
@@ -94,3 +95,34 @@ export const buildCourseTemplateContext = (
     courseTime,
   };
 };
+
+export type CourseField = "name" | "time" | "contents" | "objectives";
+
+export function getCourseIssues(course: LessonCourse) {
+  const issues: { field: CourseField; message: string }[] = [];
+  if (!course.name.trim())
+    issues.push({ field: "name", message: "填写课程名称" });
+  if (!hasCompleteCourseTime([dayjs(course.start), dayjs(course.end)]))
+    issues.push({
+      field: "time",
+      message:
+        course.start && course.end
+          ? "检查授课时间的开始和结束"
+          : "选择授课时间",
+    });
+  if (!course.contents.trim())
+    issues.push({ field: "contents", message: "填写课程内容" });
+  if (!course.objectives.trim())
+    issues.push({ field: "objectives", message: "填写教学目标" });
+  return issues;
+}
+
+export function lessonCourseContext(activeClass: string, course: LessonCourse) {
+  return buildCourseTemplateContext({
+    "class-name": activeClass,
+    "course-name": course.name,
+    "course-time": [dayjs(course.start), dayjs(course.end)],
+    "course-contents": course.contents.split("\n"),
+    "course-objectives": course.objectives.split("\n"),
+  });
+}

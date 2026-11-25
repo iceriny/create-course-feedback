@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../test/memoryStorage";
-import { flushLessonDraft, useRosterStore } from "./rosterStore";
+import {
+  flushLessonDraft,
+  getCurrentLessonDraft,
+  loadLatestLessonDraft,
+  pauseLessonDraftSaving,
+  useRosterStore,
+} from "./rosterStore";
 beforeEach(() => {
   installMemoryStorage();
   localStorage.clear();
@@ -16,7 +22,7 @@ describe("lesson workflow", () => {
       content: "Zoe feedback",
       confirmed: true,
     });
-    store.sortStudentsByName("A");
+    store.sortStudentsByName();
     expect(useRosterStore.getState().studentsInfo[1]).toMatchObject({
       performance: { brief: "Zoe observation" },
       content: "Zoe feedback",
@@ -69,6 +75,77 @@ describe("lesson workflow", () => {
     expect(students).toHaveLength(3);
     expect(new Set(students.map((s) => s.id)).size).toBe(3);
   });
+
+  it("leaves newer stored versions untouched and retains local edits in a conflict", () => {
+    const state = useRosterStore.getState();
+    state.loadStudentsFromStorage("A");
+    state.setCourse({ name: "First draft" });
+    expect(flushLessonDraft()).toBe(true);
+    const saved = getCurrentLessonDraft()!;
+    const otherTab = {
+      ...saved,
+      course: { ...saved.course, name: "Another tab" },
+    };
+    localStorage.setItem("lessonDraft:A", JSON.stringify(otherTab));
+
+    expect(flushLessonDraft()).toBe(true);
+    expect(JSON.parse(localStorage.getItem("lessonDraft:A")!).course.name).toBe(
+      "Another tab",
+    );
+    state.setCourse({ name: "My changes" });
+    expect(flushLessonDraft()).toBe(false);
+    expect(useRosterStore.getState().saveStatus).toBe("conflict");
+    expect(getCurrentLessonDraft()?.course.name).toBe("My changes");
+    expect(JSON.parse(localStorage.getItem("lessonDraft:A")!).course.name).toBe(
+      "Another tab",
+    );
+    expect(loadLatestLessonDraft()).toBe(true);
+    expect(useRosterStore.getState().course.name).toBe("Another tab");
+  });
+
+  it("suppresses flushes during restoration and preserves the imported draft", () => {
+    const state = useRosterStore.getState();
+    state.loadStudentsFromStorage("A");
+    state.setCourse({ name: "Device draft" });
+    expect(flushLessonDraft()).toBe(true);
+    const saved = getCurrentLessonDraft()!;
+    const resume = pauseLessonDraftSaving();
+    try {
+      state.setCourse({ name: "Old page write" });
+      const restored = {
+        ...saved,
+        course: { ...saved.course, name: "Imported draft" },
+      };
+      localStorage.setItem("lessonDraft:A", JSON.stringify(restored));
+      expect(flushLessonDraft()).toBe(true);
+      expect(
+        JSON.parse(localStorage.getItem("lessonDraft:A")!).course.name,
+      ).toBe("Imported draft");
+      expect(loadLatestLessonDraft()).toBe(true);
+      expect(useRosterStore.getState().course.name).toBe("Imported draft");
+    } finally {
+      resume();
+    }
+  });
+
+  it("copies existing observations when switching to an empty class-wide format", () => {
+    const state = useRosterStore.getState();
+    state.updateStudentsFromRawValues(["Zoe"], "A");
+    state.updateStudentInfo(0, {
+      performance: { brief: "My notes" },
+      content: "Reviewed feedback",
+      confirmed: true,
+    });
+    state.setDefaultStudentVersion("v2");
+    state.applyDefaultStudentVersion();
+    expect(useRosterStore.getState().studentsList[0].version).toBe("v2");
+    expect(useRosterStore.getState().studentsInfo[0]).toMatchObject({
+      performance: { brief: "My notes", total: "My notes" },
+      content: "Reviewed feedback",
+      feedbackNeedsUpdate: "observation",
+      confirmed: false,
+    });
+  });
 });
 
 it("archives completed lessons and restores them without overwriting the new draft", () => {
@@ -90,4 +167,13 @@ it("archives completed lessons and restores them without overwriting the new dra
   expect(
     JSON.parse(localStorage.getItem(`lessonArchive:${newId}`)!).course.name,
   ).toBe("Second");
+  store.updateStudentInfo(0, { content: "Edited after reopening" });
+  expect(
+    store.restoreLesson(
+      JSON.parse(localStorage.getItem(`lessonArchive:${id}`)!),
+    ),
+  ).toBe(false);
+  expect(useRosterStore.getState().studentsInfo[0].content).toBe(
+    "Edited after reopening",
+  );
 });

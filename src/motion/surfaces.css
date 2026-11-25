@@ -36,7 +36,7 @@
   --radius-inset: 6px;
 }
 :root[data-theme="dark"] {
-  --shadow-ink: 0 4 12;
+  --shadow-ink: 0 0 0;
   --shadow-strength: 2.35;
 }
 

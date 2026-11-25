@@ -17,19 +17,19 @@
   --rc-virtual-list-scrollbar-bg: var(--scroll-thumb);
 }
 :root[data-theme="dark"] {
-  --surface: #182230;
-  --muted: #9bacbf;
-  --border: #334254;
-  --text: #dce6f2;
-  --selected: #203c59;
+  --surface: #1c1c1c;
+  --muted: #a8a8a8;
+  --border: #333333;
+  --text: #e7e7e7;
+  --selected: #262e38;
   --primary: #83b7f0;
-  --status-idle: #a2afbf;
+  --status-idle: #a0a0a0;
   --status-ready: #64c588;
   --status-failed: #ff858c;
   --status-update: #e9ae63;
-  --track: #334254;
-  --scroll-thumb: #52677f;
-  --scroll-thumb-hover: #839ab4;
+  --track: #363636;
+  --scroll-thumb: #565656;
+  --scroll-thumb-hover: #838383;
 }
 * {
   box-sizing: border-box;

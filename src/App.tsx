@@ -103,13 +103,32 @@ const ThemedWorkbench = React.memo(function ThemedWorkbench({
           boxShadow: "var(--shadow-dialog)",
           boxShadowSecondary: "var(--shadow-floating)",
           boxShadowTertiary: "var(--shadow-surface)",
-          colorPrimary: dark ? "#6ca8eb" : "#2563a6",
-          colorBgContainer: dark ? "#182230" : "#ffffff",
-          colorBgElevated: dark ? "#202c3c" : "#ffffff",
           borderRadius: 8,
           fontSize: 14,
-          colorBgLayout: dark ? "#101722" : "#f3f5f8",
-          colorText: dark ? "#dce6f2" : "#1c2c3e",
+          ...(dark
+            ? {
+                colorBgBase: "#121212",
+                colorBgLayout: "#121212",
+                colorBgContainer: "#1c1c1c",
+                colorBgElevated: "#242424",
+                colorBgSpotlight: "#363636",
+                colorBorder: "#3d3d3d",
+                colorBorderSecondary: "#333333",
+                colorText: "#e7e7e7",
+                colorPrimary: "#6ca8eb",
+                colorPrimaryBg: "#262e38",
+                colorPrimaryBgHover: "#2c3a4c",
+                colorLink: "#83b7f0",
+                colorLinkHover: "#a6cbf4",
+                colorLinkActive: "#6ca8eb",
+              }
+            : {
+                colorBgLayout: "#f3f5f8",
+                colorBgContainer: "#ffffff",
+                colorBgElevated: "#ffffff",
+                colorText: "#1c2c3e",
+                colorPrimary: "#2563a6",
+              }),
         },
         components: {
           Button: {

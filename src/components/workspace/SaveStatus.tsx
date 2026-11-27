@@ -1,4 +1,5 @@
 import { Alert, Button, Flex, Popconfirm } from "antd";
+import { CheckOutlined, SyncOutlined } from "@ant-design/icons";
 import {
   flushLessonDraft,
   getCurrentLessonDraft,
@@ -6,6 +7,24 @@ import {
 } from "../../store/rosterStore";
 import { createLessonBackup } from "../../services/persistence/lessonRepository";
 import { downloadJson } from "../../utils/storage";
+
+export function SaveIndicator() {
+  const status = useRosterStore((state) => state.saveStatus);
+  const activeClass = useRosterStore((state) => state.activeClass);
+  if (!activeClass || (status !== "saving" && status !== "saved")) return null;
+  const saving = status === "saving";
+  return (
+    <span
+      className="save-status"
+      data-status={status}
+      role="status"
+      aria-label={saving ? "正在保存" : "已保存到此设备"}
+    >
+      {saving ? <SyncOutlined /> : <CheckOutlined />}
+      <span>{saving ? "保存中" : "已保存"}</span>
+    </span>
+  );
+}
 
 export default function SaveStatus({
   onLoadLatest,
@@ -55,9 +74,5 @@ export default function SaveStatus({
         </Flex>
       }
     />
-  ) : activeClass ? (
-    <span className="save-status" data-status={status} role="status">
-      {status === "saving" ? "正在保存…" : "已保存到此设备"}
-    </span>
   ) : null;
 }

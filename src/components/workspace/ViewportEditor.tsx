@@ -1,5 +1,6 @@
 import {
   startTransition,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -7,11 +8,15 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { observationFields } from "../../domain/student";
+import {
+  StageMotionContext,
+  type StageMotionSignal,
+} from "../../motion/stageMotion";
 import "./viewport-editor.css";
 
 type Visibility = {
   near: boolean;
-  stage: HTMLElement;
+  stage: StageMotionSignal;
   card: HTMLElement | null;
   update: (near: boolean) => void;
 };
@@ -19,10 +24,6 @@ type VisibilityChange = { near: boolean; distance: number; due: number };
 
 const visibility = new WeakMap<Element, Visibility>();
 const pending = new Map<Element, VisibilityChange>();
-const stageObservers = new WeakMap<
-  HTMLElement,
-  { observer: MutationObserver; users: number }
->();
 let viewport: IntersectionObserver | undefined;
 let workFrame: number | undefined;
 let workTimer: number | undefined;
@@ -60,8 +61,7 @@ function canUpdate(node: Element) {
   return (
     entry &&
     node.isConnected &&
-    !entry.stage.hasAttribute("data-moving") &&
-    !entry.stage.hasAttribute("data-navigation-scrolling") &&
+    !entry.stage.isBusy() &&
     !entry.card?.hasAttribute("data-retiring")
   );
 }
@@ -112,34 +112,13 @@ function scheduleVisibility() {
   }
 }
 
-function observeStage(stage: HTMLElement) {
-  let watched = stageObservers.get(stage);
-  if (!watched) {
-    const observer = new MutationObserver(scheduleVisibility);
-    observer.observe(stage, {
-      attributes: true,
-      attributeFilter: ["data-moving", "data-navigation-scrolling"],
-    });
-    watched = { observer, users: 0 };
-    stageObservers.set(stage, watched);
-  }
-  watched.users++;
-  return () => {
-    if (--watched.users === 0) {
-      watched.observer.disconnect();
-      stageObservers.delete(stage);
-    }
-  };
-}
-
 function observeEditor(
   node: HTMLElement,
+  stage: StageMotionSignal,
   near: boolean,
   onVisibility: (near: boolean) => void,
 ) {
-  const stage = node.closest<HTMLElement>(".editor-stage");
-  if (!stage) return;
-  const stopWatchingStage = observeStage(stage);
+  const stopWatchingStage = stage.subscribe(scheduleVisibility);
   viewport ??= new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -190,6 +169,7 @@ export default function ViewportEditor({
   name: string;
   children: ReactNode;
 }) {
+  const stage = useContext(StageMotionContext);
   const root = useRef<HTMLDivElement>(null);
   const focusEditor = useRef<"first" | "last">(undefined);
   const lastVisibility = useRef(!defer);
@@ -206,12 +186,12 @@ export default function ViewportEditor({
 
   useEffect(() => {
     const node = root.current;
-    if (!node || !defer) return;
-    return observeEditor(node, lastVisibility.current, (near) => {
+    if (!node || !defer || !stage) return;
+    return observeEditor(node, stage, lastVisibility.current, (near) => {
       lastVisibility.current = near;
       setNearViewport(near);
     });
-  }, [defer]);
+  }, [defer, stage]);
 
   useLayoutEffect(() => {
     const node = root.current;
@@ -221,14 +201,16 @@ export default function ViewportEditor({
         node.querySelectorAll<HTMLElement>(
           "button, input, select, textarea, a[href], [tabindex]",
         ),
-      ).filter(
+      );
+      if (focusEditor.current === "last") controls.reverse();
+      const target = controls.find(
         (control) =>
           control.tabIndex >= 0 &&
           !control.matches(":disabled") &&
-          control.getClientRects().length > 0,
+          !control.closest("[hidden], [inert]") &&
+          control.getClientRects().length > 0 &&
+          getComputedStyle(control).visibility === "visible",
       );
-      const target =
-        focusEditor.current === "last" ? controls.at(-1) : controls[0];
       focusEditor.current = undefined;
       target?.focus();
     });
@@ -280,13 +262,13 @@ export default function ViewportEditor({
           inert={mounted}
         >
           <button type="button" onClick={() => enterEditor("first")}>
-            {name}
+            <span className="viewport-preview-name">{name}</span>
+            <span className="viewport-preview-status" aria-hidden="true" />
+            <span className="viewport-preview-mode" aria-hidden="true">
+              {detailed ? "分项" : "简要"}
+            </span>
           </button>
           <div className="viewport-preview-form" aria-hidden="true" inert>
-            <div className="viewport-preview-preferences">
-              <span />
-              <span />
-            </div>
             <div className="viewport-preview-observations">
               {(detailed ? observationFields : [["brief", "课堂表现"]]).map(
                 ([field, label]) => (
@@ -297,10 +279,14 @@ export default function ViewportEditor({
                 ),
               )}
             </div>
-            <div className="viewport-preview-shortcut" />
             <div className="viewport-preview-feedback">
               <strong>反馈正文</strong>
               <i />
+              <div className="viewport-preview-actions">
+                <i />
+                <i />
+                <i />
+              </div>
             </div>
           </div>
         </div>

@@ -33,6 +33,7 @@ export default function useWorkbenchDock(lessonId: string, visible: boolean) {
     const workbench = ref.current;
     if (!visible || !workbench) return;
     const toolbar = workbench.querySelector<HTMLElement>(".workbench-toolbar");
+    const actions = workbench.querySelector<HTMLElement>(".action-bar");
     if (!toolbar) return;
     const stickyInset = Number.parseFloat(getComputedStyle(toolbar).top) || 0;
 
@@ -41,9 +42,14 @@ export default function useWorkbenchDock(lessonId: string, visible: boolean) {
         "--toolbar-height",
         `${toolbar.offsetHeight}px`,
       );
+      workbench.style.setProperty(
+        "--dock-height",
+        `${actions?.offsetHeight ?? 0}px`,
+      );
     };
     const observer = new ResizeObserver(measure);
     observer.observe(toolbar);
+    if (actions) observer.observe(actions);
     measure();
     const threshold = workbench.querySelector(".workbench-threshold");
     const dock = new IntersectionObserver(

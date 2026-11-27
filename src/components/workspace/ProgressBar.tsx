@@ -1,16 +1,19 @@
-import { Tag } from "antd";
 import { CheckOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { useShallow } from "zustand/react/shallow";
-import { useRosterStore } from "../../store/rosterStore";
-import { isFeedbackConfirmed } from "../../domain/feedbackStatus";
+import type { RosterFilter } from "./rosterStatus";
 import "./progress-confirmation.css";
 
 export default function ProgressBar({
   confirmation,
+  counts,
+  filter,
+  onFilter,
 }: {
   confirmation?: { name: string };
+  counts: { total: number; done: number; processing: number; failed: number };
+  filter: RosterFilter;
+  onFilter: (filter: "processing" | "failed") => void;
 }) {
   const [notice, setNotice] = useState({
     event: confirmation,
@@ -24,23 +27,14 @@ export default function ProgressBar({
       visible: Boolean(confirmation),
     });
   }
-  const counts = useRosterStore(
-    useShallow((state) => {
-      const values = Object.values(state.studentsInfo).filter(
-        (i) => i.activated,
-      );
-      return {
-        total: values.length,
-        done: values.filter(isFeedbackConfirmed).length,
-        loading: values.filter((i) => i.loading).length,
-        failed: values.filter((i) => i.generation?.status === "failed").length,
-      };
-    }),
-  );
   const completion = counts.total ? counts.done / counts.total : 0;
   return (
-    <div className="lesson-progress" aria-live="polite">
-      <div className="progress-label" data-confirmed={notice.visible}>
+    <div className="lesson-progress">
+      <div
+        className="progress-label"
+        data-confirmed={notice.visible}
+        aria-live="polite"
+      >
         <span className="progress-label-default">本次进度</span>
         {notice.visible && (
           <span
@@ -73,15 +67,27 @@ export default function ProgressBar({
       >
         <i style={{ "--lesson-completion": completion } as CSSProperties} />
       </div>
-      {counts.loading > 0 && (
-        <Tag className="progress-state" color="processing">
-          {counts.loading} 人生成中
-        </Tag>
+      {counts.processing > 0 && (
+        <button
+          type="button"
+          className="progress-state"
+          data-feedback-status="generating"
+          aria-pressed={filter === "processing"}
+          onClick={() => onFilter("processing")}
+        >
+          {counts.processing} 人处理中
+        </button>
       )}
       {counts.failed > 0 && (
-        <Tag className="progress-state" color="warning">
+        <button
+          type="button"
+          className="progress-state"
+          data-feedback-status="failed"
+          aria-pressed={filter === "failed"}
+          onClick={() => onFilter("failed")}
+        >
           {counts.failed} 人需重试
-        </Tag>
+        </button>
       )}
     </div>
   );

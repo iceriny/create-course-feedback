@@ -29,6 +29,11 @@ export default function ContentTransition({
   children,
 }: Props) {
   const incoming = { contentKey, replacementKey, children };
+  const committed = useRef(incoming);
+  // Only committed content can become the outgoing visual snapshot.
+  useLayoutEffect(() => {
+    committed.current = { contentKey, replacementKey, children };
+  }, [contentKey, replacementKey, children]);
   const [frame, setFrame] = useState<{
     active: Pane;
     outgoing: RetiringPane[];
@@ -42,32 +47,28 @@ export default function ContentTransition({
   });
   const navigated = frame.active.contentKey !== contentKey;
   const replaced = frame.active.replacementKey !== replacementKey;
-  if (navigated || replaced || frame.active.children !== children) {
-    const changing = navigated || replaced;
-    const arrival = navigated
-      ? direction
-      : replaced
-        ? "replace"
-        : frame.direction;
+  if (navigated || replaced) {
+    const arrival = navigated ? direction : "replace";
+    const incomingKey = paneKey(incoming);
     const returning = frame.outgoing.find(
-      ({ pane }) => paneKey(pane) === paneKey(incoming),
+      ({ pane }) => paneKey(pane) === incomingKey,
     );
     // Keep returning panes in the same DOM slot so their transitions continue.
-    const order = changing
-      ? (returning?.pane.order ?? frame.nextOrder)
-      : frame.active.order;
+    const order = returning?.pane.order ?? frame.nextOrder;
+    const outgoing =
+      paneKey(committed.current) === paneKey(frame.active)
+        ? { ...frame.active, children: committed.current.children }
+        : frame.active;
     setFrame({
       active: { ...incoming, order },
-      outgoing: changing
-        ? prefersReducedMotion()
-          ? []
-          : [
-              ...frame.outgoing.filter(
-                ({ pane }) => paneKey(pane) !== paneKey(incoming),
-              ),
-              { pane: frame.active, direction: arrival },
-            ]
-        : frame.outgoing,
+      outgoing: prefersReducedMotion()
+        ? []
+        : [
+            ...frame.outgoing.filter(
+              ({ pane }) => paneKey(pane) !== incomingKey,
+            ),
+            { pane: outgoing, direction: arrival },
+          ],
       direction: arrival,
       nextOrder: Math.max(frame.nextOrder, order + 1),
     });
@@ -123,7 +124,11 @@ export default function ContentTransition({
     >
       {[
         ...frame.outgoing.map((entry) => ({ ...entry, retiring: entry })),
-        { pane: frame.active, direction: frame.direction, retiring: undefined },
+        {
+          pane: { ...frame.active, children },
+          direction: frame.direction,
+          retiring: undefined,
+        },
       ]
         .sort((left, right) => left.pane.order - right.pane.order)
         .map(({ pane, direction, retiring }) => {

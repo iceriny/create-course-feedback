@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -16,6 +17,18 @@ const rulerWidth = 40;
 const viewportPadding = 8;
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+const finePointer =
+  typeof window !== "undefined"
+    ? window.matchMedia?.("(pointer: fine)")
+    : undefined;
+
+function subscribePointer(notify: () => void) {
+  finePointer?.addEventListener("change", notify);
+  return () => finePointer?.removeEventListener("change", notify);
+}
+
+const canUseRuler = () => finePointer?.matches ?? false;
+const serverCanUseRuler = () => false;
 
 interface ScrollMetrics {
   top: number;
@@ -91,7 +104,12 @@ export default function FixedTextEditor({
   const pendingDrag = useRef<{ frame: number; top: number } | null>(null);
   const [measured, setMetrics] = useState<ScrollMetrics | null>(null);
   const [ruler, setRuler] = useState<(Drag & { active: boolean }) | null>(null);
-  const hasText = Boolean(value);
+  const rulerEnabled = useSyncExternalStore(
+    subscribePointer,
+    canUseRuler,
+    serverCanUseRuler,
+  );
+  const hasText = rulerEnabled && Boolean(value);
   const metrics = hasText ? measured : null;
   const drag = ruler?.active ? ruler : null;
 
@@ -199,7 +217,8 @@ export default function FixedTextEditor({
       : Math.floor((metrics?.top ?? 0) / (metrics?.lineHeight ?? 1)) + 1;
 
   const startDrag = (event: PointerEvent<HTMLDivElement>) => {
-    if (!metrics || drag || event.button !== 0) return;
+    if (!metrics || drag || event.button !== 0 || event.pointerType === "touch")
+      return;
     const track = event.currentTarget.querySelector(".line-navigator-track")!;
     const rect = track.getBoundingClientRect();
     const mark = rect.top + progress * rect.height;
@@ -291,7 +310,11 @@ export default function FixedTextEditor({
   const ticks = Math.min(lastStartLine, 17);
 
   return (
-    <div className="fixed-text-editor" ref={container}>
+    <div
+      className="fixed-text-editor"
+      ref={container}
+      data-native-scroll={!rulerEnabled || undefined}
+    >
       {children}
       {metrics && (
         <Tooltip

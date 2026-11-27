@@ -4,215 +4,244 @@
   initial-value: 100%;
 }
 
-.viewport-editor {
-  position: relative;
-  min-width: 0;
-}
-
-.viewport-editor-placeholder {
-  --preview-padding: 12px;
-  --preview-control: var(--ant-color-fill-tertiary);
-  box-sizing: border-box;
-  block-size: var(--measured-brief-card, 413px);
-  overflow: clip;
-  border: 1px solid var(--border);
-}
-
-.viewport-editor-placeholder[data-detailed] {
-  block-size: var(--measured-detailed-card, 545px);
-}
-
-.viewport-editor-placeholder > button {
-  display: block;
-  width: 100%;
-  block-size: 37px;
-  padding: 0 var(--preview-padding);
-  border: 0;
-  border-block-end: 1px solid transparent;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
-  outline-offset: -3px;
-}
-
-.viewport-preview-form {
-  padding: 12px var(--preview-padding);
-  pointer-events: none;
-}
-
-.viewport-preview-preferences {
-  display: flex;
-  gap: 8px;
-  margin-block-end: 8px;
-}
-
-.viewport-preview-preferences > span,
-.viewport-preview-form i {
-  box-sizing: border-box;
-  display: block;
-  border-radius: var(--radius-control);
-  background: var(--preview-control);
-}
-
-.viewport-preview-preferences > span {
-  inline-size: 7em;
-  block-size: 32px;
-}
-
-.viewport-preview-observations {
-  display: grid;
-  gap: 4px 10px;
-}
-
-.viewport-editor-placeholder[data-detailed] .viewport-preview-observations {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.viewport-preview-observations > div {
-  min-width: 0;
-  padding-block-end: 6px;
-}
-
-.viewport-preview-observations span,
-.viewport-preview-feedback > strong {
-  display: flex;
-  align-items: center;
-  block-size: 32px;
-  color: var(--muted);
-}
-
-.viewport-preview-observations i {
-  block-size: 54px;
-}
-
-.viewport-editor-placeholder[data-detailed] .viewport-preview-observations i {
-  block-size: 34px;
-}
-
-.viewport-preview-shortcut {
-  inline-size: 8em;
-  block-size: 20px;
-  background: linear-gradient(var(--track), var(--track)) left center / 100% 1px
-    no-repeat;
-}
-
-.viewport-preview-feedback {
-  margin-block-start: 14px;
-}
-
-.viewport-preview-feedback > strong {
-  margin-block-end: 8px;
-}
-
-.viewport-preview-feedback > strong::after {
-  inline-size: 4em;
-  block-size: 30px;
-  margin-inline-start: auto;
-  border-radius: var(--radius-control);
-  corner-shape: squircle;
-  background: var(--preview-control);
-  content: "";
-}
-
-.viewport-preview-feedback i {
-  block-size: 100px;
-}
-
-.viewport-editor[data-editor-ready] > .viewport-editor-placeholder {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .viewport-editor > .student-editor {
-    --editor-foreground: 100%;
-    transition: --editor-foreground var(--motion-fast, 150ms) ease-out;
+@layer motion {
+  .viewport-editor {
+    position: relative;
+    min-width: 0;
   }
 
-  .student-card-anchor[data-content-arriving]
-    .viewport-editor
-    > .student-editor {
-    --editor-foreground: 0%;
-    transition: none;
-  }
-
-  @starting-style {
-    .viewport-editor[data-deferred] > .student-editor {
-      --editor-foreground: 0%;
-    }
-  }
-
-  .viewport-editor .student-editor textarea.ant-input {
-    color: color-mix(
-      in srgb,
-      var(--ant-color-text) var(--editor-foreground),
-      transparent
-    );
-  }
-
-  .viewport-editor .student-editor textarea.ant-input:disabled {
-    color: color-mix(
-      in srgb,
-      var(--ant-color-text-disabled) var(--editor-foreground),
-      transparent
-    );
-  }
-
-  .viewport-editor .student-editor textarea.ant-input::placeholder {
-    color: color-mix(
-      in srgb,
-      var(--ant-color-text-placeholder) var(--editor-foreground),
-      transparent
-    );
-  }
-
-  .viewport-editor
-    .student-editor
-    :is(
-      .editor-feedback-status,
-      .ant-card-extra,
-      .student-preferences .ant-select-content,
-      .student-preferences .ant-select-suffix,
-      .observation-shortcut,
-      .feedback-header-actions,
-      .review-actions,
-      .editor-feedback-notice,
-      details
-    ) {
-    opacity: var(--editor-foreground);
-  }
-}
-
-@media (max-width: 700px) {
   .viewport-editor-placeholder {
-    --preview-padding: 16px;
-    block-size: var(--measured-brief-card, 399px);
+    --preview-padding: 12px;
+    --preview-control: var(--ant-color-fill-tertiary);
+    box-sizing: border-box;
+    block-size: var(--measured-brief-card, auto);
+    overflow: clip;
+    border: 1px solid var(--border);
   }
 
   .viewport-editor-placeholder[data-detailed] {
-    block-size: var(--measured-detailed-card, 699px);
+    block-size: var(--measured-detailed-card, auto);
+  }
+
+  .viewport-editor-placeholder > button {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) auto 1fr;
+    align-items: center;
+    justify-items: start;
+    gap: 6px;
+    inline-size: 100%;
+    min-block-size: var(--ant-card-header-height-sm, 38px);
+    padding: 0 var(--preview-padding);
+    border: 0;
+    border-block-end: 1px solid transparent;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+    outline-offset: -3px;
+  }
+
+  .viewport-preview-name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .viewport-preview-status {
+    inline-size: 3em;
+    block-size: 1.4em;
+    border-radius: var(--radius-inset);
+    background: var(--preview-control);
+  }
+
+  .viewport-preview-mode {
+    justify-self: end;
+    min-inline-size: 5em;
+    padding-inline: 6px;
+    border-radius: var(--radius-inset);
+    background: var(--surface-elevated, var(--surface));
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+    text-align: center;
+  }
+
+  .viewport-preview-form {
+    padding: 12px var(--preview-padding);
+    pointer-events: none;
+  }
+
+  .viewport-preview-form i {
+    box-sizing: border-box;
+    display: block;
+    border-radius: var(--radius-control);
+    background: var(--preview-control);
+  }
+
+  .viewport-preview-observations {
+    display: grid;
+    gap: 4px 10px;
   }
 
   .viewport-editor-placeholder[data-detailed] .viewport-preview-observations {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .viewport-preview-observations span {
-    block-size: 36px;
+  .viewport-preview-observations > div {
+    min-width: 0;
+    padding-block-end: 6px;
   }
 
-  .viewport-preview-shortcut {
-    display: none;
+  .viewport-preview-observations span,
+  .viewport-preview-feedback > strong {
+    display: flex;
+    align-items: center;
+    block-size: 32px;
+    color: var(--muted);
+  }
+
+  .viewport-preview-observations i {
+    block-size: var(--compact-brief-height);
+  }
+
+  .viewport-editor-placeholder[data-detailed] .viewport-preview-observations i {
+    block-size: var(--compact-observation-height);
   }
 
   .viewport-preview-feedback {
     margin-block-start: 12px;
+  }
+
+  .viewport-preview-feedback > strong {
+    margin-block-end: 8px;
+  }
+
+  .viewport-preview-feedback > strong::after {
+    inline-size: 4em;
+    block-size: 30px;
+    margin-inline-start: auto;
+    border-radius: var(--radius-control);
+    corner-shape: squircle;
+    background: var(--preview-control);
+    content: "";
+  }
+
+  .viewport-preview-feedback > i {
+    block-size: var(--compact-feedback-height);
+  }
+
+  .viewport-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-block-start: 12px;
+  }
+
+  .viewport-preview-actions > i {
+    inline-size: 8em;
+    block-size: var(--review-button-size);
+  }
+
+  .viewport-preview-actions > i:last-child {
+    inline-size: var(--review-button-size);
+  }
+
+  .viewport-editor[data-editor-ready] > .viewport-editor-placeholder {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :where(:root[data-motion="full"]) {
+    .viewport-editor > .student-editor {
+      --editor-foreground: 100%;
+      transition: --editor-foreground var(--motion-fast) ease-out;
+    }
+
+    .student-card-anchor[data-content-arriving]
+      .viewport-editor
+      > .student-editor {
+      --editor-foreground: 0%;
+      transition: none;
+    }
+
+    @starting-style {
+      .viewport-editor[data-deferred] > .student-editor {
+        --editor-foreground: 0%;
+      }
+    }
+
+    .viewport-editor .student-editor textarea.ant-input {
+      color: color-mix(
+        in srgb,
+        var(--ant-color-text) var(--editor-foreground),
+        transparent
+      );
+    }
+
+    .viewport-editor .student-editor textarea.ant-input:disabled {
+      color: color-mix(
+        in srgb,
+        var(--ant-color-text-disabled) var(--editor-foreground),
+        transparent
+      );
+    }
+
+    .viewport-editor .student-editor textarea.ant-input::placeholder {
+      color: color-mix(
+        in srgb,
+        var(--ant-color-text-placeholder) var(--editor-foreground),
+        transparent
+      );
+    }
+
+    .viewport-editor
+      .student-editor
+      :is(
+        .editor-feedback-status,
+        .ant-card-extra,
+        .student-preferences .ant-select-content,
+        .student-preferences .ant-select-suffix,
+        .observation-shortcut,
+        .feedback-header-actions,
+        .review-actions,
+        .editor-feedback-notice,
+        details
+      ) {
+      opacity: var(--editor-foreground);
+    }
+  }
+
+  @media (max-width: 700px) {
+    .viewport-editor-placeholder {
+      --preview-padding: 16px;
+    }
+
+    .viewport-editor-placeholder[data-detailed] .viewport-preview-observations {
+      grid-template-columns: 1fr;
+    }
+
+    .viewport-preview-observations span {
+      block-size: 36px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .viewport-editor-placeholder > button {
+      grid-template-columns: minmax(0, max-content) auto 1fr;
+      min-block-size: calc(var(--ant-control-height-sm, 24px) + 1.6em + 4px);
+      gap: 3px 6px;
+    }
+
+    .viewport-preview-mode {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
   }
 }

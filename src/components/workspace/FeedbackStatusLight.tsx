@@ -17,7 +17,7 @@ export default function FeedbackStatusLight({
     <Tooltip title={label} placement="right">
       <span
         className="feedback-status-light"
-        data-status={status}
+        data-feedback-status={status}
         aria-hidden="true"
       >
         {status === "ready" && (

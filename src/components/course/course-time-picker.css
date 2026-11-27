@@ -1,0 +1,47 @@
+@layer components {
+  .course-time-segments {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .course-time-segment {
+    display: grid;
+    min-inline-size: 0;
+    gap: 4px;
+  }
+
+  .course-time-segment > span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .course-time-date-row,
+  .course-time-end-date,
+  .course-time-issue {
+    grid-column: 1 / -1;
+  }
+
+  .course-time-date-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .course-time-date-row .ant-checkbox-wrapper {
+    align-items: center;
+    min-block-size: 40px;
+    white-space: nowrap;
+  }
+
+  .course-time-segments .ant-input {
+    min-inline-size: 0;
+    min-block-size: 40px;
+    font-size: 16px;
+  }
+
+  .course-time-issue:empty {
+    position: absolute;
+  }
+}

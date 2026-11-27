@@ -2313,6 +2313,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "create-course-feedback@workspace:."
   dependencies:
+    "@ant-design/cssinjs": "npm:^2.1.2"
     "@ant-design/icons": "npm:^6.2.5"
     "@eslint/js": "npm:^9.21.0"
     "@types/lodash": "npm:^4.17.16"

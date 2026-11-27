@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AutoComplete, Input } from "antd";
 import type { TextAreaRef } from "antd/es/input/TextArea";
 import { useInputAssistantStore } from "../../store/InputAssistantStore";
@@ -17,6 +17,8 @@ import {
 } from "../common/selectTooltips";
 import type { V2QuickOptions } from "../../types";
 
+let voiceHintShown = false;
+
 export default function ObservationInput({
   id,
   field,
@@ -25,7 +27,6 @@ export default function ObservationInput({
   active,
   disabled,
   onChange,
-  onNext,
 }: {
   id: string;
   field: string;
@@ -34,16 +35,21 @@ export default function ObservationInput({
   active: boolean;
   disabled: boolean;
   onChange: (value: string) => void;
-  onNext: () => void;
 }) {
   const [records, setRecords] = useState<ObservationRecord[]>([]);
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [voiceHint, setVoiceHint] = useState(false);
   const textarea = useRef<TextAreaRef>(null);
   const canDictate = active && !disabled;
   const voice = useVoiceInput(canDictate, onChange);
   const shownValue = voice.preview ?? value;
   const showOptions = focused && canDictate && !dragging && !voice.active;
+  useEffect(() => {
+    if (!voiceHint) return;
+    const expiration = window.setTimeout(() => setVoiceHint(false), 3200);
+    return () => window.clearTimeout(expiration);
+  }, [voiceHint]);
   const legacy = useInputAssistantStore((s) =>
     showOptions ? s.v1Suggestions : undefined,
   );
@@ -135,6 +141,10 @@ export default function ObservationInput({
           open={dragging || !active || voice.active ? false : undefined}
           filterOption={false}
           onFocus={() => {
+            if (canDictate && !voiceHintShown) {
+              voiceHintShown = true;
+              setVoiceHint(true);
+            }
             const state = useRosterStore.getState();
             setRecords([
               ...readObservationHistory(),
@@ -153,6 +163,7 @@ export default function ObservationInput({
             setFocused(true);
           }}
           onBlur={() => {
+            setVoiceHint(false);
             setFocused(false);
             setRecords([]);
             remember(value);
@@ -166,23 +177,15 @@ export default function ObservationInput({
             variant="filled"
             aria-label={label}
             data-observation={active || undefined}
+            data-workbench-voice-active={voice.active || undefined}
             placeholder="填写表现，或选择历史与启发提示"
             readOnly={voice.active}
-            onPointerDown={(event) =>
-              voice.beginPress(event.nativeEvent, event.currentTarget)
-            }
+            onPointerDown={(event) => {
+              if (event.pointerType !== "touch")
+                voice.beginPress(event.nativeEvent, event.currentTarget);
+            }}
             onContextMenu={(event) => {
               if (voice.active) event.preventDefault();
-            }}
-            onKeyDown={(e) => {
-              if (
-                !e.nativeEvent.isComposing &&
-                e.ctrlKey &&
-                e.key === "Enter"
-              ) {
-                e.preventDefault();
-                onNext();
-              }
             }}
           />
         </AutoComplete>
@@ -190,6 +193,7 @@ export default function ObservationInput({
           <VoiceInput
             voice={voice}
             getInput={() => textarea.current?.resizableTextArea?.textArea}
+            hint={voiceHint && !voice.active}
           />
         )}
       </FixedTextEditor>

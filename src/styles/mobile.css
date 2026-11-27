@@ -1,0 +1,232 @@
+@media (max-width: 1100px) {
+  .editor-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .observation-panel {
+    padding-right: 0;
+  }
+}
+@media (min-width: 1101px) {
+  .single-editor .feedback-panel {
+    --text-field-height: 484px;
+  }
+}
+@media (max-width: 1100px) {
+  .compact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .page-content {
+    padding-top: 12px;
+  }
+
+  .page-header-inner {
+    min-block-size: 51px;
+    gap: 4px;
+  }
+
+  .chrome-identity,
+  .chrome-class,
+  .chrome-actions {
+    gap: 4px;
+  }
+
+  .page-brand {
+    padding-inline-end: 0;
+  }
+
+  .page-brand > span,
+  .chrome-action-label,
+  .save-status > span:last-child:not(.anticon) {
+    display: none;
+  }
+
+  .chrome-lesson-actions {
+    gap: 2px !important;
+    padding-inline-end: 4px;
+  }
+
+  .chrome-system-actions {
+    gap: 2px !important;
+  }
+
+  .chrome-class-picker {
+    min-inline-size: 54px;
+    max-inline-size: 36vw;
+    font-size: 14px;
+  }
+
+  .save-status {
+    padding-inline: 3px;
+  }
+
+  .page-header .icon-action {
+    min-inline-size: 30px;
+    min-block-size: 34px;
+    padding-inline: 3px;
+  }
+
+  .course-grid,
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .workbench {
+    --action-bar-inset: calc(8px + env(safe-area-inset-bottom, 0px));
+    min-block-size: auto;
+  }
+  .course-panel .ant-card-head {
+    align-items: start;
+  }
+  .ant-card-head,
+  .ant-card-body {
+    padding-inline: 16px !important;
+  }
+  .course-panel .ant-card-extra .ant-select {
+    max-width: min(150px, 42vw);
+  }
+  .workbench-toolbar {
+    position: static;
+    padding-block: 0;
+  }
+  .roster-panel {
+    position: static;
+    max-block-size: none;
+  }
+  .roster-panel-content {
+    max-block-size: none;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+  .roster-panel .roster-items,
+  .roster-panel .roster-search,
+  .observation-shortcut {
+    display: none;
+  }
+  .roster-selectors .roster-mobile-picker {
+    display: inline-flex;
+    flex: 1;
+    min-width: 0;
+  }
+  .roster-selectors .roster-filter {
+    width: auto;
+    min-width: 108px;
+    max-width: 140px;
+  }
+  .roster-mobile-participation {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .roster-panel .invert-participation {
+    align-self: start;
+    height: auto;
+    font-size: 12px;
+    padding-block: 2px;
+  }
+  .course-summary {
+    gap: 2px 10px;
+    font-size: 13px;
+  }
+
+  .action-bar {
+    grid-column: 1;
+    bottom: var(--action-bar-inset);
+    gap: 6px;
+  }
+
+  .dock-summary {
+    flex-direction: column;
+    align-items: start;
+    gap: 2px;
+    padding-inline: 2px 6px;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .dock-summary > span + span::before {
+    content: none;
+  }
+
+  .lesson-progress {
+    gap: 6px 8px;
+  }
+
+  .student-editor .ant-card-head-title {
+    white-space: normal;
+  }
+
+  .observation-label {
+    min-block-size: 36px;
+  }
+
+  .compact-editor .observation-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .icon-action {
+    min-inline-size: 36px;
+    min-block-size: 36px;
+  }
+
+  .student-card-anchor {
+    scroll-margin-top: 56px;
+  }
+
+  .student-card-anchor.single-editor {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .mobile-student-navigation {
+    position: sticky;
+    inset-block-start: 4px;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    margin-block-end: 8px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-panel);
+  }
+
+  .mobile-student-navigation > div {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 6px;
+    min-inline-size: 0;
+    text-align: center;
+  }
+
+  .mobile-student-navigation strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-student-navigation span {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 380px) {
+  :root {
+    --page-gutter: 10px;
+  }
+
+  .page-header .chrome-actions .icon-action {
+    min-inline-size: 27px;
+  }
+
+  .workbench-shortcuts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}

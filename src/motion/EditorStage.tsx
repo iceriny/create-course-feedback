@@ -6,6 +6,20 @@ import {
   type ReactElement,
 } from "react";
 import { animateMotion, prefersReducedMotion } from "./engine";
+import {
+  backplateGeometry,
+  hasStageMovement,
+  isStageRectVisible,
+  peerArrivalX,
+  retiringCardBox,
+  stageOffset,
+} from "./stageGeometry";
+import {
+  bindStageMotion,
+  createStageMotionSignal,
+  StageMotionContext,
+  type StageMovement,
+} from "./stageMotion";
 
 type Card = ReactElement<
   HTMLAttributes<HTMLDivElement> & {
@@ -35,15 +49,6 @@ type Geometry = {
   opacity: number;
 };
 
-function visible(rect: DOMRect) {
-  return (
-    rect.bottom > 0 &&
-    rect.top < innerHeight &&
-    rect.right > 0 &&
-    rect.left < innerWidth
-  );
-}
-
 // React's pre-mutation snapshot captures the presentation position, including
 // a partially completed move. All writes happen before the next paint.
 export default class EditorStage extends Component<Props, State> {
@@ -56,6 +61,8 @@ export default class EditorStage extends Component<Props, State> {
     prepared: [],
   };
   private stage = createRef<HTMLDivElement>();
+  private motion = createStageMotionSignal();
+  private unbindMotion?: () => void;
   private animations: Animation[] = [];
   private generation = 0;
   private cancelPreparation?: () => void;
@@ -90,7 +97,17 @@ export default class EditorStage extends Component<Props, State> {
   };
 
   componentDidMount() {
+    this.unbindMotion = bindStageMotion(this.stage.current!, this.motion);
     this.prepareNeighbor();
+  }
+
+  private setMovement(movement?: StageMovement) {
+    const stage = this.stage.current;
+    if (stage) {
+      if (movement) stage.dataset.moving = movement;
+      else delete stage.dataset.moving;
+    }
+    this.motion.setMovement(movement);
   }
 
   static getDerivedStateFromProps(props: Props, state: State) {
@@ -125,6 +142,7 @@ export default class EditorStage extends Component<Props, State> {
       previous.compact !== this.props.compact || prefersReducedMotion();
     const geometry = new Map<HTMLElement, Geometry>();
     const stage = this.stage.current!;
+    const viewport = { width: innerWidth, height: innerHeight };
     for (const card of Array.from(stage.children) as HTMLElement[]) {
       if (
         card.hidden ||
@@ -133,14 +151,16 @@ export default class EditorStage extends Component<Props, State> {
       )
         continue;
       const surface =
-        stage.dataset.moving === "mode"
+        this.motion.getMovement() === "mode"
           ? (card.querySelector<HTMLElement>(".editor-backplate") ?? card)
           : card;
       const rect = surface.getBoundingClientRect();
       geometry.set(card, {
         rect,
         opacity:
-          !currentOnly && this.animations.length && visible(rect)
+          !currentOnly &&
+          this.animations.length &&
+          isStageRectVisible(rect, viewport)
             ? Number(getComputedStyle(card).opacity)
             : 1,
       });
@@ -165,6 +185,7 @@ export default class EditorStage extends Component<Props, State> {
     const generation = ++this.generation;
     this.stop();
     const stage = this.stage.current!;
+    const viewport = { width: innerWidth, height: innerHeight };
     this.cancelPreparation?.();
     const cards = (Array.from(stage.children) as HTMLElement[]).filter(
       (card) => !card.hasAttribute("data-prepared"),
@@ -186,7 +207,7 @@ export default class EditorStage extends Component<Props, State> {
     }
     const finish = () => {
       if (generation !== this.generation) return;
-      delete stage.dataset.moving;
+      this.setMovement();
       for (const card of stage.children)
         card.removeAttribute("data-content-arriving");
       this.animations = [];
@@ -222,7 +243,11 @@ export default class EditorStage extends Component<Props, State> {
     }
     const old = before.get(current);
     let next = current.getBoundingClientRect();
-    if (old && visible(old.rect) && !visible(next)) {
+    if (
+      old &&
+      isStageRectVisible(old.rect, viewport) &&
+      !isStageRectVisible(next, viewport)
+    ) {
       // Preserve the selected card's screen position across long grid reflows.
       window.scrollBy({ top: next.top - old.rect.top, behavior: "instant" });
       next = current.getBoundingClientRect();
@@ -232,8 +257,8 @@ export default class EditorStage extends Component<Props, State> {
       return;
     }
     if (previous.compact !== this.props.compact) {
-      stage.dataset.moving = "mode";
-      if (old && visible(next) && next.width && next.height) {
+      this.setMovement("mode");
+      if (old && isStageRectVisible(next, viewport)) {
         this.morphCard(current, old.rect, next);
       }
       if (this.animations.length)
@@ -249,19 +274,12 @@ export default class EditorStage extends Component<Props, State> {
       previous.navigation !== this.props.navigation &&
       this.props.navigation?.id === current.dataset.studentId;
     const sign = this.props.cursor >= previous.cursor ? 1 : -1;
-    const stride = bounds.width + 12;
     const previousActive = [...before.keys()].find(
       (node) => node.dataset.studentId === previous.cards[0]?.key,
     );
     const origin = previousActive && before.get(previousActive)?.rect;
-    const incomingX = old
-      ? old.rect.left - next.left
-      : (origin ? origin.left - bounds.left : 0) + sign * stride;
-    stage.dataset.moving = peer
-      ? this.props.compact
-        ? "page"
-        : "peer"
-      : "layout";
+    const incomingX = peerArrivalX(old?.rect, next, origin, bounds, sign);
+    this.setMovement(peer ? (this.props.compact ? "page" : "peer") : "layout");
 
     const play = (
       node: HTMLElement,
@@ -277,22 +295,17 @@ export default class EditorStage extends Component<Props, State> {
     const discard = new Set<string>();
     for (const card of cards) {
       if (!card.hasAttribute("data-retiring")) continue;
-      const rect = before.get(card)?.rect;
-      if (
-        !rect ||
-        !visible(rect) ||
-        rect.right <= bounds.left ||
-        rect.left >= bounds.right
-      ) {
+      const box = retiringCardBox(before.get(card)?.rect, bounds, viewport);
+      if (!box) {
         card.style.display = "none";
         if (card.dataset.studentId) discard.add(card.dataset.studentId);
         continue;
       }
       Object.assign(card.style, {
-        left: `${rect.left - bounds.left}px`,
-        top: `${rect.top - bounds.top}px`,
-        width: `${rect.width}px`,
-        height: `${rect.height}px`,
+        left: `${box.left}px`,
+        top: `${box.top}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
       });
     }
     const targets = cards.map((card) => ({
@@ -325,16 +338,20 @@ export default class EditorStage extends Component<Props, State> {
         );
         continue;
       }
-      if (!visible(rect) && (!from || !visible(from))) continue;
+      if (
+        !isStageRectVisible(rect, viewport) &&
+        (!from || !isStageRectVisible(from, viewport))
+      )
+        continue;
       const opacity = before.get(card)?.opacity ?? 1;
       if (opacity < 0.999)
         play(card, [{ opacity }, { opacity: 1 }], "enter", "visibility");
-      const dx = peer ? incomingX : from ? from.left - rect.left : 0;
-      const dy = from ? from.top - rect.top : 0;
-      if (Math.abs(dx) + Math.abs(dy) > 0.5)
+      const { x, y } = from ? stageOffset(from, rect) : { x: 0, y: 0 };
+      const dx = peer ? incomingX : x;
+      if (hasStageMovement(dx, y))
         play(
           card,
-          [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+          [{ transform: `translate(${dx}px, ${y}px)` }, { transform: "none" }],
           "move",
         );
       else if (!from && !peer)
@@ -361,40 +378,36 @@ export default class EditorStage extends Component<Props, State> {
   }
 
   private morphCard(card: HTMLElement, from: DOMRect, to: DOMRect) {
-    const x = from.left - to.left,
-      y = from.top - to.top;
-    const sx = from.width / to.width,
-      sy = from.height / to.height;
-    if (!sx || !sy) return;
+    const geometry = backplateGeometry(from, to);
+    if (!geometry) return;
+    const {
+      movement: { x, y },
+      resize,
+    } = geometry;
     const move = (node: HTMLElement, frames: Keyframe[]) => {
       const animation = animateMotion(node, frames, "move", "geometry");
       if (animation) this.animations.push(animation);
     };
-    if (Math.abs(x) + Math.abs(y) > 0.5)
+    if (hasStageMovement(x, y))
       move(card, [
         { transform: `translate(${x}px, ${y}px)` },
         { transform: "none" },
       ]);
-    if (
-      Math.abs(from.width - to.width) + Math.abs(from.height - to.height) <
-      0.5
-    )
-      return;
+    if (!resize) return;
+    const { scaleX, scaleY, clipRight, clipBottom } = resize;
     const plate = card.querySelector<HTMLElement>(".editor-backplate");
     if (plate)
       move(plate, [
-        { transform: `scale(${sx}, ${sy})` },
+        { transform: `scale(${scaleX}, ${scaleY})` },
         { transform: "scale(1)" },
       ]);
 
     // Text and live inputs lay out once at their final size. Only reveal the
     // part covered by the moving sheet, without scaling the form's texture.
     const face = card.querySelector<HTMLElement>(".viewport-editor");
-    const right = Math.max(0, to.width - from.width);
-    const bottom = Math.max(0, to.height - from.height);
-    if (face && (right || bottom))
+    if (face && (clipRight || clipBottom))
       move(face, [
-        { clipPath: `inset(0 ${right}px ${bottom}px 0)` },
+        { clipPath: `inset(0 ${clipRight}px ${clipBottom}px 0)` },
         { clipPath: "inset(0px)" },
       ]);
   }
@@ -407,45 +420,49 @@ export default class EditorStage extends Component<Props, State> {
     this.generation++;
     this.cancelPreparation?.();
     this.stop();
+    this.setMovement();
+    this.unbindMotion?.();
   }
 
   render() {
     return (
-      <div
-        ref={this.stage}
-        className={
-          this.props.compact ? "editor-stage compact-grid" : "editor-stage"
-        }
-      >
-        {this.props.cards.concat(
-          this.state.retiring.map((card) =>
-            cloneElement(card, {
-              "data-current-editor": false,
-              "data-retiring": true,
-              hidden: this.state.switchingMode,
-              "aria-hidden": true,
-              inert: true,
-            }),
-          ),
-          this.props.neighbors
-            .filter(
-              (card) =>
-                this.state.prepared.includes(card.key) &&
-                !this.state.retiring.some(
-                  (leaving) => leaving.key === card.key,
-                ),
-            )
-            .map((card) =>
+      <StageMotionContext.Provider value={this.motion}>
+        <div
+          ref={this.stage}
+          className={
+            this.props.compact ? "editor-stage compact-grid" : "editor-stage"
+          }
+        >
+          {this.props.cards.concat(
+            this.state.retiring.map((card) =>
               cloneElement(card, {
-                "data-prepared": true,
-                hidden: true,
+                "data-current-editor": false,
+                "data-retiring": true,
+                hidden: this.state.switchingMode,
                 "aria-hidden": true,
                 inert: true,
-                "data-current-editor": false,
               }),
             ),
-        )}
-      </div>
+            this.props.neighbors
+              .filter(
+                (card) =>
+                  this.state.prepared.includes(card.key) &&
+                  !this.state.retiring.some(
+                    (leaving) => leaving.key === card.key,
+                  ),
+              )
+              .map((card) =>
+                cloneElement(card, {
+                  "data-prepared": true,
+                  hidden: true,
+                  "aria-hidden": true,
+                  inert: true,
+                  "data-current-editor": false,
+                }),
+              ),
+          )}
+        </div>
+      </StageMotionContext.Provider>
     );
   }
 }

@@ -1,0 +1,377 @@
+@layer reset {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100%;
+  }
+  body {
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+      sans-serif;
+  }
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer base {
+  /* Text editors own the scrollbar according to the available pointer. */
+  *:not(.fixed-text-editor textarea) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    *:not(.fixed-text-editor textarea) {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+    :not(.fixed-text-editor textarea)::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    :not(.fixed-text-editor textarea)::-webkit-scrollbar-thumb {
+      min-height: 32px;
+      min-width: 32px;
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background: var(--scroll-thumb);
+      background-clip: padding-box;
+    }
+    :not(.fixed-text-editor textarea)::-webkit-scrollbar-thumb:is(
+        :hover,
+        :active
+      ) {
+      background-color: var(--scroll-thumb-hover);
+    }
+  }
+
+  body {
+    background: var(--surface-canvas, Canvas);
+    color: var(--text, CanvasText);
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .page-content {
+    flex: 1;
+    min-inline-size: 0;
+    padding: 16px var(--page-gutter) 24px;
+  }
+
+  .page-header {
+    padding-inline: var(--page-gutter);
+    color: var(--text);
+    background: var(--surface-elevated);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .page-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-block-size: 55px;
+    max-inline-size: var(--workspace-width);
+    margin-inline: auto;
+  }
+
+  .chrome-identity,
+  .chrome-class,
+  .chrome-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-inline-size: 0;
+  }
+
+  .chrome-identity {
+    flex: 1 1 auto;
+  }
+
+  .chrome-actions {
+    flex: none;
+  }
+
+  .page-brand {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    gap: 8px;
+    padding-inline-end: 4px;
+    font-size: 15px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .page-brand-mark {
+    display: block;
+    inline-size: 24px;
+    block-size: 24px;
+  }
+
+  .chrome-class:empty {
+    display: none;
+  }
+
+  .chrome-class-picker {
+    flex: 1 1 auto;
+    min-inline-size: min(110px, 100%);
+    max-inline-size: min(285px, 34vw);
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .chrome-class > .ant-btn {
+    flex: none;
+  }
+
+  .chrome-lesson-actions {
+    border-inline-end: 1px solid var(--border);
+    padding-inline-end: 8px;
+  }
+
+  .save-status {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: var(--radius-tag);
+    background: color-mix(in srgb, var(--tone-success) 10%, transparent);
+    color: var(--tone-success);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .save-status[data-status="saving"] {
+    color: var(--tone-neutral);
+    background: color-mix(in srgb, var(--tone-neutral) 12%, transparent);
+  }
+
+  .save-alert {
+    margin-block-end: 12px;
+  }
+
+  .new-class-controls {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .new-class-controls .ant-input {
+    inline-size: min(200px, 100%);
+  }
+
+  .workspace {
+    max-inline-size: var(--workspace-width);
+    margin-inline: auto;
+  }
+
+  .ant-layout-footer {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .welcome-panel {
+    padding: clamp(32px, 8vh, 64px) 16px;
+    border: 1px dashed var(--border);
+    background: var(--surface-panel);
+    text-align: center;
+  }
+
+  .welcome-panel h1 {
+    margin: 0 0 24px;
+    font-size: clamp(22px, 3.6vw, 32px);
+  }
+
+  .visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .course-panel {
+    border-color: var(--border);
+  }
+  .workspace :is(.course-panel, .student-editor) > .ant-card-head {
+    border-block-end-color: transparent;
+  }
+  .course-summary {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+  }
+  .course-summary > span,
+  .reuse-option small {
+    color: var(--muted);
+  }
+  .reuse-option small {
+    display: block;
+    font-size: 12px;
+  }
+  .course-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 28px;
+  }
+  label,
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .course-grid .ant-picker {
+    width: 100%;
+  }
+
+  .manage-students {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 24px;
+    max-height: 40vh;
+    overflow: auto;
+  }
+  .roster-defaults {
+    margin-bottom: 16px;
+  }
+  .roster-defaults .ant-select {
+    min-width: 130px;
+  }
+  .add-students,
+  .export-preview {
+    margin-top: 16px;
+  }
+  .settings-sections {
+    display: grid;
+    gap: 28px;
+  }
+  .settings-sections
+    :is(
+      .ant-input-filled:disabled,
+      .ant-input-filled.ant-input-affix-wrapper-disabled,
+      .ant-select-filled.ant-select-disabled
+    ) {
+    border-color: transparent;
+  }
+  .settings-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .settings-fields details > * {
+    margin-top: 12px;
+  }
+  .settings-fields summary {
+    cursor: pointer;
+    color: var(--primary);
+  }
+
+  .archive-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .archive-list small {
+    display: block;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .archive-list .ant-tag {
+    margin-inline-start: 8px;
+  }
+  .history-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .history-back {
+    align-self: start;
+    padding-inline: 0;
+  }
+  .history-detail h4.ant-typography {
+    margin: 0;
+  }
+  .history-course {
+    margin: 0;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .history-course div,
+  .history-student {
+    padding: 12px;
+  }
+  .history-student + .history-student {
+    border-block-start: 1px solid var(--border);
+  }
+  .history-course dd {
+    margin-inline-start: 0;
+    white-space: pre-wrap;
+  }
+  .history-course dt {
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .history-feedback {
+    display: grid;
+    gap: 8px;
+    max-height: 48vh;
+    overflow: auto;
+  }
+  .history-student p {
+    margin: 8px 0 0;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .course-time-picker,
+  .time-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .time-presets {
+    max-width: min(380px, 80vw);
+  }
+
+  .icon-action {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .time-shortcuts .ant-btn {
+    height: 28px;
+    padding-inline: 10px;
+    border: 0;
+    box-shadow: none;
+  }
+  .time-picker-footer {
+    padding: 10px 0;
+    line-height: normal;
+  }
+  .course-time-popup .ant-picker-footer-extra {
+    padding-inline: 12px;
+  }
+}

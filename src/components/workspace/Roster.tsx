@@ -6,8 +6,11 @@ import { statusLabel, type FeedbackStatus } from "../../domain/feedbackStatus";
 import type { StudentBasicInfo } from "../../types";
 import FeedbackStatusLight from "./FeedbackStatusLight";
 import RosterMotionList from "./RosterMotionList";
-
-type Filter = FeedbackStatus | "all" | "uncopied";
+import {
+  rosterFilters,
+  type RosterEntry,
+  type RosterFilter,
+} from "./rosterStatus";
 
 function participation(
   student: StudentBasicInfo,
@@ -64,18 +67,16 @@ export default memo(function Roster({
   setSearch,
   filter,
   setFilter,
+  counts,
 }: {
-  entries: {
-    student: StudentBasicInfo;
-    index: number;
-    status: FeedbackStatus;
-  }[];
+  entries: RosterEntry[];
   selected: string;
   onSelect: (id: string) => void;
   search: string;
   setSearch: (value: string) => void;
-  filter: Filter;
-  setFilter: (value: Filter) => void;
+  filter: RosterFilter;
+  setFilter: (value: RosterFilter) => void;
+  counts: Partial<Record<RosterFilter, number>>;
 }) {
   const entryOrder = JSON.stringify(entries.map(({ student }) => student.id));
   const selectedEntry = entries.find((entry) => entry.student.id === selected);
@@ -92,6 +93,7 @@ export default memo(function Roster({
       <Input
         variant="filled"
         className="roster-search"
+        data-roster-search
         aria-label="查找学生"
         placeholder="查找学生"
         allowClear
@@ -115,21 +117,11 @@ export default memo(function Roster({
           aria-label="筛选学生"
           value={filter}
           onChange={setFilter}
-          options={[
-            { value: "all", label: "全部学生" },
-            ...(
-              [
-                "unrecorded",
-                "recorded",
-                "ready",
-                "needs_update",
-                "failed",
-                "confirmed",
-                "inactive",
-              ] as const
-            ).map((value) => ({ value, label: statusLabel(value) })),
-            { value: "uncopied", label: "已确认 · 未复制" },
-          ]}
+          options={rosterFilters.map(([value, label]) => ({
+            value,
+            label: `${label} (${counts[value] ?? 0})`,
+            disabled: value !== "all" && value !== filter && !counts[value],
+          }))}
         />
         <span className="roster-mobile-participation">
           {selectedEntry &&

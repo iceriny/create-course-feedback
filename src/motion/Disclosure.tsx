@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { motionTiming } from "./engine";
+import { onMotionReduced, prefersReducedMotion } from "./preference";
 import "./disclosure.css";
 
 interface Props {
@@ -51,7 +52,6 @@ export default function Disclosure({
       document.getElementById(triggerId)?.focus({ preventScroll: true });
     }
 
-    const media = matchMedia("(prefers-reduced-motion: reduce)");
     const { duration, easing } = motionTiming("enter");
     const layout = flow?.(frame);
 
@@ -64,7 +64,7 @@ export default function Disclosure({
       setSwitching(false);
     };
 
-    if (media.matches || duration <= 0 || !frame.animate) {
+    if (prefersReducedMotion() || duration <= 0 || !frame.animate) {
       finish();
       return;
     }
@@ -139,13 +139,10 @@ export default function Disclosure({
       animate(frame.getBoundingClientRect().height, Math.max(remaining, 1));
     });
     observer.observe(entering);
-    const reduce = () => {
-      if (media.matches) finish();
-    };
-    media.addEventListener("change", reduce);
+    const unsubscribe = onMotionReduced(finish);
     return () => {
       observer.disconnect();
-      media.removeEventListener("change", reduce);
+      unsubscribe();
     };
   }, [open, switching, triggerId, flow]);
 

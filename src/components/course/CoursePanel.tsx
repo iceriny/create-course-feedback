@@ -213,7 +213,14 @@ export default memo(function CoursePanel({
                 {course.start
                   ? dayjs(course.start).format("YYYY-MM-DD HH:mm")
                   : "未设置时间"}
-                {course.end ? ` – ${dayjs(course.end).format("HH:mm")}` : ""}
+                {course.end
+                  ? ` – ${dayjs(course.end).format(
+                      course.start &&
+                        dayjs(course.end).isSame(course.start, "day")
+                        ? "HH:mm"
+                        : "YYYY-MM-DD HH:mm",
+                    )}`
+                  : ""}
               </span>
               <span>
                 {course.contents.split("\n").filter(Boolean).length} 项课程内容

@@ -1,18 +1,124 @@
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
+  memo,
   type ReactNode,
 } from "react";
-import { Button, DatePicker, Flex, Popover, Tooltip, message } from "antd";
+import {
+  Button,
+  Checkbox,
+  DatePicker,
+  Flex,
+  Input,
+  Popover,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import dayjs from "dayjs";
+import { useShallow } from "zustand/react/shallow";
 import {
   applyClassTime,
+  moveCourseDate,
   readClassTimes,
+  resolveCourseTimeSegments,
+  segmentCourseTime,
   type ClassTime,
+  type CourseTimeSegments,
 } from "../../domain/classTime";
 import { useRosterStore } from "../../store/rosterStore";
+import useNarrowWorkspace from "../../hooks/useNarrowWorkspace";
+import "./course-time-picker.css";
+
+const dateFormat = "YYYY-MM-DD";
+const dateCellFormats = { date: dateFormat, month: "YYYY-MM" };
+
+function SegmentedCourseTime({
+  segments,
+  issue,
+  onChange,
+}: {
+  segments: CourseTimeSegments;
+  issue?: string;
+  onChange: (segments: CourseTimeSegments) => void;
+}) {
+  const issueId = useId();
+  const crossDay = segments.endDate !== undefined;
+  const nextDate = segments.date
+    ? dayjs(segments.date).add(1, "day").format(dateFormat)
+    : "";
+  const timeFields = [
+    { field: "startTime", label: "开始时间" },
+    { field: "endTime", label: "结束时间" },
+  ] as const;
+
+  return (
+    <div
+      className="course-time-segments"
+      role="group"
+      aria-label="授课时间"
+      aria-describedby={issue ? issueId : undefined}
+    >
+      <div className="course-time-date-row">
+        <label className="course-time-segment">
+          <span>{crossDay ? "开始日期" : "日期"}</span>
+          <Input
+            type="date"
+            variant="filled"
+            value={segments.date}
+            onChange={(event) =>
+              onChange(moveCourseDate(segments, event.currentTarget.value))
+            }
+          />
+        </label>
+        <Checkbox
+          checked={crossDay}
+          onChange={(event) =>
+            onChange({
+              ...segments,
+              endDate: event.target.checked ? nextDate : undefined,
+            })
+          }
+        >
+          跨日
+        </Checkbox>
+      </div>
+      {crossDay && (
+        <label className="course-time-segment course-time-end-date">
+          <span>结束日期</span>
+          <Input
+            type="date"
+            variant="filled"
+            value={segments.endDate}
+            min={nextDate || undefined}
+            onChange={(event) =>
+              onChange({ ...segments, endDate: event.currentTarget.value })
+            }
+          />
+        </label>
+      )}
+      {timeFields.map(({ field, label }) => (
+        <label className="course-time-segment" key={field}>
+          <span>{label}</span>
+          <Input
+            type="time"
+            variant="filled"
+            value={segments[field]}
+            onChange={(event) =>
+              onChange({ ...segments, [field]: event.currentTarget.value })
+            }
+          />
+        </label>
+      ))}
+      <div className="course-time-issue" id={issueId} aria-live="polite">
+        {issue && <Typography.Text type="danger">{issue}</Typography.Text>}
+      </div>
+    </div>
+  );
+}
 
 function CalendarPanel({ children }: { children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -39,14 +145,25 @@ function CalendarPanel({ children }: { children: ReactNode }) {
   return <div ref={panel}>{children}</div>;
 }
 
-const dateCellFormats = { date: "YYYY-MM-DD", month: "YYYY-MM" };
-
-export default function CourseTimePicker({ active }: { active: boolean }) {
+export default memo(function CourseTimePicker({ active }: { active: boolean }) {
   const name = useRosterStore((s) => s.activeClass);
-  const course = useRosterStore((s) => s.course);
+  const course = useRosterStore(
+    useShallow((s) => ({ start: s.course.start, end: s.course.end })),
+  );
   const [slots, setSlots] = useState(() => readClassTimes(name));
+  const [edit, setEdit] = useState<{
+    range: Pick<typeof course, "start" | "end">;
+    segments: CourseTimeSegments;
+  }>();
   const [notice, holder] = message.useMessage();
   const picker = useRef<HTMLDivElement>(null);
+  const checkedDefault = useRef(false);
+  const narrow = useNarrowWorkspace();
+  // Keep incomplete fields alongside the most recent range these fields saved.
+  const segments =
+    edit?.range.start === course.start && edit.range.end === course.end
+      ? edit.segments
+      : segmentCourseTime(course);
   useLayoutEffect(() => {
     const container = picker.current;
     if (
@@ -56,9 +173,15 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
     ) {
       container.querySelector("input")?.focus();
     }
-  }, [active]);
+  }, [active, narrow]);
   const change = (patch: { start: string; end: string }) => {
+    setEdit(undefined);
     useRosterStore.getState().setCourse(patch);
+  };
+  const changeSegments = (next: CourseTimeSegments) => {
+    const { range } = resolveCourseTimeSegments(next);
+    setEdit({ range, segments: next });
+    useRosterStore.getState().setCourse(range);
   };
   useEffect(() => {
     if (!active) return;
@@ -75,8 +198,14 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
         ? previous
         : defaults,
     );
-    if (!state.course.start && !state.course.end && defaults[0])
+    if (
+      !checkedDefault.current &&
+      !state.course.start &&
+      !state.course.end &&
+      defaults[0]
+    )
       state.setCourse(applyClassTime(defaults[0]));
+    checkedDefault.current = true;
   }, [active]);
   const save = (next: ClassTime[]) => {
     try {
@@ -86,17 +215,25 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
       void notice.error("常用时间保存失败，请重试。");
     }
   };
-  const shortcuts = [
-    [-1, "昨天"],
-    [-7, "上周"],
-    [0, "本日"],
-  ].map(([offset, label]) => (
+  const shortcuts = (
+    [
+      [-1, "昨天"],
+      [-7, "上周"],
+      [0, "本日"],
+    ] as const
+  ).map(([offset, label]) => (
     <Button
       key={label}
       size="small"
       type="text"
       autoInsertSpace={false}
       onClick={() => {
+        if (narrow && edit && segments === edit.segments) {
+          const date = segments.date ? dayjs(segments.date) : dayjs();
+          const nextDate = offset === 0 ? dayjs() : date.add(offset, "day");
+          changeSegments(moveCourseDate(segments, nextDate.format(dateFormat)));
+          return;
+        }
         const start = course.start
           ? dayjs(course.start)
           : dayjs().startOf("day").hour(8);
@@ -104,7 +241,7 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
         const delta =
           offset === 0
             ? dayjs().startOf("day").diff(start.startOf("day"), "day")
-            : Number(offset);
+            : offset;
         change({
           start: start.add(delta, "day").toISOString(),
           end: end.add(delta, "day").toISOString(),
@@ -117,50 +254,61 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
   return (
     <div className="course-time-picker" ref={picker}>
       {holder}
-      <DatePicker.RangePicker
-        variant="filled"
-        aria-label="授课时间"
-        popupAlign={{
-          overflow: {
-            shiftY: true,
-            shiftX: true,
-            adjustY: true,
-            adjustX: true,
-          },
-        }}
-        classNames={{ popup: { root: "course-time-popup" } }}
-        panelRender={(panel) => <CalendarPanel>{panel}</CalendarPanel>}
-        cellRender={(value, { originNode, type }) => {
-          if ((type === "date" || type === "month") && dayjs.isDayjs(value)) {
-            return (
-              <Tooltip title={value.format(dateCellFormats[type])}>
-                {originNode}
-              </Tooltip>
-            );
+      {narrow ? (
+        <SegmentedCourseTime
+          segments={segments}
+          issue={resolveCourseTimeSegments(segments).issue}
+          onChange={changeSegments}
+        />
+      ) : (
+        <DatePicker.RangePicker
+          variant="filled"
+          aria-label="授课时间"
+          popupAlign={{
+            overflow: {
+              shiftY: true,
+              shiftX: true,
+              adjustY: true,
+              adjustX: true,
+            },
+          }}
+          classNames={{ popup: { root: "course-time-popup" } }}
+          panelRender={(panel) => <CalendarPanel>{panel}</CalendarPanel>}
+          cellRender={(value, { originNode, type }) => {
+            if ((type === "date" || type === "month") && dayjs.isDayjs(value)) {
+              return (
+                <Tooltip title={value.format(dateCellFormats[type])}>
+                  {originNode}
+                </Tooltip>
+              );
+            }
+            return originNode;
+          }}
+          value={
+            course.start || course.end
+              ? [
+                  course.start ? dayjs(course.start) : null,
+                  course.end ? dayjs(course.end) : null,
+                ]
+              : null
           }
-          return originNode;
-        }}
-        value={
-          course.start && course.end
-            ? [dayjs(course.start), dayjs(course.end)]
-            : null
-        }
-        showTime={{ format: "HH:mm" }}
-        format="YYYY-MM-DD HH:mm"
-        minuteStep={10}
-        needConfirm={false}
-        onChange={(dates) =>
-          change({
-            start: dates?.[0]?.toISOString() || "",
-            end: dates?.[1]?.toISOString() || "",
-          })
-        }
-        renderExtraFooter={() => (
-          <Flex className="time-picker-footer time-shortcuts" gap={8} wrap>
-            {shortcuts}
-          </Flex>
-        )}
-      />
+          showTime={{ format: "HH:mm" }}
+          format="YYYY-MM-DD HH:mm"
+          minuteStep={10}
+          needConfirm={false}
+          onChange={(dates) =>
+            change({
+              start: dates?.[0]?.toISOString() || "",
+              end: dates?.[1]?.toISOString() || "",
+            })
+          }
+          renderExtraFooter={() => (
+            <Flex className="time-picker-footer time-shortcuts" gap={8} wrap>
+              {shortcuts}
+            </Flex>
+          )}
+        />
+      )}
       <Flex className="time-shortcuts" align="center" gap={8} wrap>
         {shortcuts}
         <Popover
@@ -183,7 +331,7 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
                       change(
                         applyClassTime(
                           slot,
-                          course.start ? dayjs(course.start) : dayjs(),
+                          segments.date ? dayjs(segments.date) : dayjs(),
                         ),
                       )
                     }
@@ -249,4 +397,4 @@ export default function CourseTimePicker({ active }: { active: boolean }) {
       </Flex>
     </div>
   );
-}
+});

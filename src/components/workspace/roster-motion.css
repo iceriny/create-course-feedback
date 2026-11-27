@@ -1,119 +1,145 @@
-.roster-motion-list {
-  position: relative;
-  isolation: isolate;
-}
+@layer motion {
+  .roster-motion-list {
+    position: relative;
+    isolation: isolate;
+  }
 
-.roster-items .roster-item {
-  position: relative;
-}
+  .roster-items .roster-item {
+    position: relative;
+  }
 
-.roster-selection-marker {
-  position: absolute;
-  top: 0;
-  inset-inline: 0;
-  box-sizing: border-box;
-  border-radius: var(--radius-inset);
-  background: var(--selected);
-  pointer-events: none;
-}
+  .roster-selection-marker {
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    box-sizing: border-box;
+    border-radius: var(--radius-inset);
+    background: var(--selected);
+    pointer-events: none;
+  }
 
-.roster-selection-marker::before {
-  position: absolute;
-  inset-block-start: 50%;
-  inset-inline-start: 3px;
-  inline-size: 3px;
-  block-size: 12px;
-  border-radius: 999px;
-  background: var(--primary);
-  translate: 0 -50%;
-  content: "";
-}
+  .roster-selection-marker::before {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 3px;
+    inline-size: 3px;
+    block-size: 12px;
+    border-radius: 999px;
+    background: var(--primary);
+    translate: 0 -50%;
+    content: "";
+  }
 
-.roster-row-exits {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  inset-inline: 0;
-  pointer-events: none;
-}
+  .roster-row-exits {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    inset-inline: 0;
+    pointer-events: none;
+  }
 
-.roster-motion-list .roster-row-exit {
-  position: absolute;
-  box-sizing: border-box;
-  inset-inline: 0;
-  margin: 0;
-}
+  .roster-motion-list .roster-row-exit {
+    position: absolute;
+    box-sizing: border-box;
+    inset-inline: 0;
+    margin: 0;
+  }
 
-.manage-students:not(:has(> [data-roster-row], .roster-row-exit)) {
-  margin-top: 0;
-}
-
-.feedback-status-light[data-status="ready"]::before {
-  box-sizing: border-box;
-  border: 1px solid var(--primary);
-  border-radius: 4px;
-  background: transparent;
-}
-
-.feedback-status-light[data-status="confirmed"]::before {
-  background: var(--status-ready);
-}
-
-.feedback-status-light .feedback-status-review {
-  color: var(--primary);
-}
-
-.lesson-progress .progress-track i {
-  width: 100%;
-  transform-origin: left center;
-  transform: scaleX(var(--lesson-completion, 0));
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .feedback-status-confirmed {
-    animation: feedback-confirmed var(--motion-base, 220ms)
-      var(--motion-spring, ease-out) both;
+  .manage-students:not(:has(> [data-roster-row], .roster-row-exit)) {
+    margin-top: 0;
   }
 
   .lesson-progress .progress-track i {
-    transition: transform var(--motion-base, 220ms)
-      var(--motion-settle, ease-out);
+    width: 100%;
+    transform-origin: left center;
+    transform: scaleX(var(--lesson-completion, 0));
   }
 
-  .feedback-status-light::before {
-    transition:
-      background-color var(--motion-fast, 150ms) var(--motion-settle, ease-out),
-      border-color var(--motion-fast, 150ms) var(--motion-settle, ease-out),
-      width var(--motion-fast, 150ms) var(--motion-settle, ease-out),
-      height var(--motion-fast, 150ms) var(--motion-settle, ease-out);
+  :where(:root[data-motion="full"]) {
+    .feedback-status-confirmed {
+      animation: feedback-confirmed var(--motion-base)
+        var(--motion-spring, ease-out) both;
+    }
+
+    .lesson-progress .progress-track i {
+      transition: transform var(--motion-base) var(--motion-settle, ease-out);
+    }
+
+    .feedback-status-light::before {
+      transition:
+        background-color var(--motion-fast) var(--motion-settle, ease-out),
+        border-color var(--motion-fast) var(--motion-settle, ease-out),
+        transform var(--motion-base) var(--motion-settle);
+    }
+
+    .progress-state,
+    .batch-stop,
+    .save-alert {
+      animation: workspace-status-in var(--motion-base)
+        var(--motion-settle, ease-out) both;
+    }
+
+    .feedback-status-light[data-feedback-status="generating"]::before {
+      animation: feedback-generation-spin 900ms linear infinite;
+    }
+
+    .feedback-status-light[data-feedback-status="retrying"]::before,
+    .save-status[data-status="saving"] > .anticon {
+      animation: workspace-status-pulse 1.4s ease-in-out infinite alternate;
+    }
+
+    :is(.roster-student, .history-student .ant-btn, .time-shortcuts .ant-btn) {
+      transition:
+        background-color var(--motion-fast) var(--motion-settle),
+        scale var(--motion-fast) var(--motion-settle);
+    }
+
+    :is(
+        .roster-student,
+        .history-student .ant-btn,
+        .time-shortcuts .ant-btn
+      ):active:not(:disabled) {
+      scale: 0.992;
+    }
   }
 
-  .progress-state,
-  .batch-stop,
-  .save-alert {
-    animation: workspace-status-in var(--motion-base, 220ms)
-      var(--motion-settle, ease-out) both;
+  @keyframes feedback-confirmed {
+    from {
+      opacity: 0;
+      transform: scale(0.65);
+    }
   }
 
-  .save-status {
-    transition: color var(--motion-base, 220ms) var(--motion-settle, ease-out);
+  :is(
+      .roster-student,
+      .history-student .ant-btn,
+      .time-shortcuts .ant-btn
+    ):hover:not(:disabled) {
+    background-color: var(--row-hover);
   }
-}
 
-@keyframes feedback-confirmed {
-  from {
-    opacity: 0;
-    transform: scale(0.65);
+  .roster-student {
+    border-radius: var(--radius-tag);
   }
-}
 
-.save-status[data-status="saving"],
-:root[data-theme="dark"] .save-status[data-status="saving"] {
-  color: var(--text);
-}
+  @keyframes feedback-generation-spin {
+    to {
+      rotate: 1turn;
+    }
+  }
 
-@keyframes workspace-status-in {
-  from {
-    opacity: 0.45;
+  @keyframes workspace-status-pulse {
+    from {
+      opacity: 0.55;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes workspace-status-in {
+    from {
+      opacity: 0.45;
+    }
   }
 }

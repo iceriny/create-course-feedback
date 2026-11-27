@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { useStore } from "zustand";
 import dayjs from "dayjs";
 import {
   Alert,
@@ -13,6 +14,11 @@ import {
 import Select from "../common/Select";
 import type { JointContent } from "antd/es/message/interface";
 import type { PromptItem, PromptType } from "../../types";
+import {
+  motionPreferenceStore,
+  setMotionPreference,
+  type MotionPreference,
+} from "../../motion/preference";
 import useOverlay from "../../motion/useOverlay";
 import AiServiceSettings from "./AiServiceSettings";
 import { PROMPTS } from "../../constants";
@@ -70,6 +76,8 @@ export default function SettingsDrawer(props: Props) {
   const backupDialog = useOverlay<Backup>();
   const backup = backupDialog.overlay?.content;
   const aiFieldId = useId();
+  const motionFieldId = useId();
+  const motionMode = useStore(motionPreferenceStore, (state) => state.mode);
   const focusSetupField = () => {
     if (!focusField) return;
     document.getElementById(`${aiFieldId}-${focusField}`)?.focus();
@@ -100,6 +108,22 @@ export default function SettingsDrawer(props: Props) {
     >
       <ConfigProvider variant="filled">
         <div className="settings-sections">
+          <section className="settings-fields" aria-label="界面动效">
+            <label htmlFor={motionFieldId}>
+              界面动效
+              <Select<MotionPreference>
+                id={motionFieldId}
+                aria-label="界面动效"
+                value={motionMode}
+                onChange={setMotionPreference}
+                options={[
+                  { value: "system", label: "跟随系统" },
+                  { value: "reduce", label: "减少动效" },
+                  { value: "full", label: "完整动效" },
+                ]}
+              />
+            </label>
+          </section>
           <AiServiceSettings
             id={aiFieldId}
             open={open}

@@ -1,3 +1,7 @@
+import { onMotionReduced, prefersReducedMotion } from "./preference";
+
+export { prefersReducedMotion } from "./preference";
+
 // Sample a unit step response once. CSS transitions and Web Animations then
 // run the same trajectory on the browser's own animation timeline.
 function spring(damping: number, frequency: number, fallback: string) {
@@ -17,15 +21,11 @@ function spring(damping: number, frequency: number, fallback: string) {
   return `linear(${samples.join(", ")})`;
 }
 
-const duration = { feedback: 150, enter: 280, move: 360, exit: 160 };
-type Intent = keyof typeof duration;
+type Intent = "feedback" | "enter" | "move" | "exit";
+let duration: Record<Intent, number>;
 const active = new Set<Animation>();
 const channels = new WeakMap<Element, Map<string, Animation>>();
 let curves: Record<Intent, string>;
-
-export function prefersReducedMotion() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 export function motionTiming(intent: Intent) {
   return { duration: duration[intent], easing: curves[intent] };
@@ -37,22 +37,20 @@ export function initializeMotion() {
   const release = "cubic-bezier(.4,0,.72,.42)";
   curves = { feedback: rebound, enter: settle, move: settle, exit: release };
   const root = document.documentElement.style;
+  const tokens = getComputedStyle(document.documentElement);
+  duration = {
+    feedback: parseFloat(tokens.getPropertyValue("--motion-fast")),
+    enter: parseFloat(tokens.getPropertyValue("--motion-base")),
+    move: parseFloat(tokens.getPropertyValue("--motion-travel")),
+    exit: parseFloat(tokens.getPropertyValue("--motion-exit")),
+  };
   root.setProperty("--motion-settle", settle);
   root.setProperty("--motion-spring", rebound);
   root.setProperty("--motion-release", release);
-  root.setProperty("--motion-fast", `${duration.feedback}ms`);
-  root.setProperty("--motion-base", `${duration.enter}ms`);
-  root.setProperty("--motion-travel", `${duration.move}ms`);
-  root.setProperty("--motion-exit", `${duration.exit}ms`);
-  const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const stop = () => {
-    if (preference.matches) for (const animation of active) animation.cancel();
-  };
-  preference.addEventListener("change", stop);
-  if (import.meta.hot)
-    import.meta.hot.dispose(() =>
-      preference.removeEventListener("change", stop),
-    );
+  const unsubscribe = onMotionReduced(() => {
+    for (const animation of active) animation.cancel();
+  });
+  import.meta.hot?.dispose(unsubscribe);
 }
 
 export function animateMotion(

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import dayjs from "dayjs";
-import { applyClassTime, readClassTimes } from "./classTime";
+import {
+  applyClassTime,
+  moveCourseDate,
+  readClassTimes,
+  resolveCourseTimeSegments,
+  segmentCourseTime,
+} from "./classTime";
 afterEach(() => vi.unstubAllGlobals());
 describe("班级常用时间", () => {
   it("以所选日期应用时段，支持跨午夜", () => {
@@ -37,5 +43,39 @@ describe("班级常用时间", () => {
         ]),
     });
     expect(readClassTimes("A")).toEqual([]);
+  });
+});
+
+describe("分段授课时间", () => {
+  it("读取已有的跨日时段并在移动日期时保留跨日天数", () => {
+    const range = applyClassTime(
+      { start: "23:30", end: "08:50", days: 3 },
+      dayjs("2026-09-09"),
+    );
+    const segments = segmentCourseTime(range);
+    expect(resolveCourseTimeSegments(segments)).toEqual({ range });
+    const moved = moveCourseDate(segments, "2026-08-27");
+    expect(moved).toEqual({
+      date: "2026-08-27",
+      startTime: "23:30",
+      endTime: "08:50",
+      endDate: "2026-08-30",
+    });
+  });
+
+  it("允许逐段编辑并识别同日倒序与错误跨日", () => {
+    const segments = { date: "2026-09-09", startTime: "23:30", endTime: "" };
+    const { range } = resolveCourseTimeSegments(segments);
+    expect(segmentCourseTime(range)).toEqual(segments);
+    expect(
+      resolveCourseTimeSegments({ ...segments, endTime: "08:50" }).issue,
+    ).toBe("结束时间须晚于开始时间。");
+    expect(
+      resolveCourseTimeSegments({
+        ...segments,
+        endTime: "08:50",
+        endDate: "2026-09-09",
+      }),
+    ).toEqual({ range, issue: "结束日期须晚于开始日期。" });
   });
 });

@@ -3,50 +3,40 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import {
-  Button,
-  Dropdown,
-  Empty,
-  Flex,
-  Input,
-  Popconfirm,
-  Popover,
-  Segmented,
-  Spin,
-} from "antd";
-import {
-  CalendarOutlined,
-  DesktopOutlined,
-  EditOutlined,
-  HistoryOutlined,
-  MoonOutlined,
-  PlusOutlined,
-  SettingOutlined,
-  SortAscendingOutlined,
-  SunOutlined,
-  TeamOutlined,
-} from "@ant-design/icons";
+import { Button, Empty, Flex, Spin } from "antd";
+import { SortAscendingOutlined, TeamOutlined } from "@ant-design/icons";
 import type { JointContent } from "antd/es/message/interface";
 import { useShallow } from "zustand/react/shallow";
 import IconButton from "../common/IconButton";
-import Select from "../common/Select";
-import Pagination from "../common/Pagination";
-import {
-  selectTooltipProps,
-  withoutOptionTitles,
-} from "../common/selectTooltips";
 import useOverlay from "../../motion/useOverlay";
 import CoursePanel from "../course/CoursePanel";
 import StudentEditor from "../student/StudentEditor";
 import BatchActions from "./BatchActions";
 import FeedbackPreview from "./FeedbackPreview";
 import LessonHistory from "./LessonHistory";
-import ProgressBar from "./ProgressBar";
+import WorkspaceHeader, { CreateClassForm } from "./WorkspaceHeader";
+import WorkbenchToolbar, {
+  MobileStudentNavigation,
+  WorkbenchPagination,
+  WorkbenchShortcutHelp,
+} from "./WorkbenchToolbar";
+import useStudentNavigation from "./useStudentNavigation";
+import useWorkbenchShortcuts, {
+  useMobileStudentSwipe,
+} from "./useWorkbenchShortcuts";
+import useFeedbackCopyFlow, {
+  pendingFeedbackCopyIds,
+} from "./useFeedbackCopyFlow";
+import {
+  countRosterStatuses,
+  matchesRosterFilter,
+  type RosterEntry,
+  type RosterFilter,
+} from "./rosterStatus";
 import Roster from "./Roster";
 import RosterManager from "./RosterManager";
 import SaveStatus from "./SaveStatus";
@@ -55,7 +45,6 @@ import ViewportEditor from "./ViewportEditor";
 import type { StudentBasicInfo } from "../../types";
 import EditorStage from "../../motion/EditorStage";
 import LessonSurface from "../../motion/LessonSurface";
-import { prefersReducedMotion } from "../../motion/engine";
 import {
   flushLessonDraft,
   getCurrentLessonDraft,
@@ -68,25 +57,14 @@ import {
   useInputAssistantStore,
   useSettingsStore,
 } from "../../store";
-import { useAppearanceStore } from "../../store/appearanceStore";
-import {
-  getCourseIssues,
-  lessonCourseContext,
-  type CourseField,
-} from "../../domain/course";
+import type { CourseField } from "../../domain/course";
 import type { LessonDraft } from "../../domain/lesson";
 import {
   feedbackStatus,
   isBatchGenerationCandidate,
   isFeedbackConfirmed,
-  isFeedbackReviewable,
   type FeedbackStatus,
 } from "../../domain/feedbackStatus";
-import {
-  buildFeedbackBatchMarkdown,
-  buildStudentFeedbackMarkdown,
-  getFeedbackTemplateIssues,
-} from "../../services/feedback/feedbackTemplate";
 import {
   cancelGeneration,
   generateFeedback,
@@ -102,52 +80,6 @@ const TemplateEditor = lazy(() => import("../settings/TemplateEditor"));
 interface Props {
   sendMessage: (content: JointContent) => void;
   sendWarning: (content: JointContent) => void;
-}
-
-type FocusTarget = "card" | "observation" | "feedback";
-type Filter = FeedbackStatus | "all" | "uncopied";
-const pageSizes = [6, 10, 16, 24, 50];
-const pageSizeChoices = pageSizes.map((value) => ({
-  value,
-  label: `每页 ${value} 人`,
-}));
-const paginationSizeChanger = {
-  ...selectTooltipProps,
-  options: withoutOptionTitles(
-    pageSizes.map((value) => ({ value, label: `${value} 条/页` })),
-  ),
-};
-type Preview = {
-  markdown: string;
-  detail: string;
-  lessonId?: string;
-  studentIds: string[];
-  singleId?: string;
-  sequential?: boolean;
-};
-
-function savedStudent(lessonId: string) {
-  try {
-    return localStorage.getItem(`lessonSelection:${lessonId}`) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function pendingCopy(exclude?: string) {
-  const { studentsList, studentsInfo } = useRosterStore.getState();
-  const selectedIndex = studentsList.findIndex(
-    (student) => student.id === exclude,
-  );
-  return [
-    ...studentsList.slice(selectedIndex + 1),
-    ...studentsList.slice(0, selectedIndex + 1),
-  ].find((student) => {
-    const info = studentsInfo[studentsList.indexOf(student)];
-    return (
-      student.id !== exclude && isFeedbackConfirmed(info) && !info.copiedAt
-    );
-  })?.id;
 }
 
 export default function MainUI({ sendMessage, sendWarning }: Props) {
@@ -171,13 +103,21 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
   const settings = useSettingsStore();
   const feedback = useFeedbackStore();
   const classes = useCourseStore((state) => state.classList);
-  const appearance = useAppearanceStore();
   const [compact, setCompact] = useState(
     () => localStorage.getItem("editorMode") === "compact",
   );
   const [pageSize, setPageSize] = useState(6);
-  const [selected, setSelected] = useState<{ lessonId: string; id: string }>();
-  const cards = useRef(new Map<string, HTMLDivElement>());
+  const {
+    cards,
+    preferredId,
+    rememberStudent,
+    navigateStudent,
+    navigationTarget,
+  } = useStudentNavigation(lessonId, workbenchRef);
+  const [focusedCard, setFocusedCard] = useState<{
+    lessonId: string;
+    id: string;
+  }>();
   const [confirmation, setConfirmation] = useState<{
     name: string;
     lessonId: string;
@@ -185,17 +125,14 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
   const onConfirmed = useCallback((name: string) => {
     setConfirmation({ name, lessonId: useRosterStore.getState().lessonId });
   }, []);
-  const [navigationTarget, setNavigationTarget] = useState<{
-    id: string;
-    target: FocusTarget;
-    lessonId: string;
-  }>();
-  const [classInput, setClassInput] = useState("");
-  const [creatingClass, setCreatingClass] = useState(false);
   const settingsDrawer = useOverlay<{ field?: AiSetupField }>();
   const templateEditor = useOverlay<true>();
   const { show: openSettings } = settingsDrawer;
   const { show: showTemplate } = templateEditor;
+  const openFeedbackTemplate = useCallback(
+    () => showTemplate(true),
+    [showTemplate],
+  );
   const settingsReturnStudent = useRef<string>(undefined);
   const showSettings = useCallback(
     (content: { field?: AiSetupField }) => {
@@ -210,47 +147,60 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
     current: ReturnType<typeof getCurrentLessonDraft>;
     records: LessonDraft[];
   }>();
-  const previewDialog = useOverlay<Preview>();
-  const { show: setPreview } = previewDialog;
-  const preview = previewDialog.overlay?.content;
-  const [format, setFormat] = useState<"plain" | "markdown">("plain");
+  const shortcutHelp = useOverlay<true>();
   const [courseFocus, setCourseFocus] = useState<{ field: CourseField } | null>(
     null,
   );
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<RosterFilter>("all");
   const issues = getGenerationIssues(course);
 
-  const lastStudent = useMemo(() => savedStudent(lessonId), [lessonId]);
-  const preferredId =
-    selected?.lessonId === lessonId ? selected.id : lastStudent;
-  const entries = useMemo(
+  const entries = useMemo<RosterEntry[]>(
     () =>
       students.map((student, index) => ({
         student,
         index,
         status:
           statuses[index] === "copied"
-            ? ("confirmed" as const)
+            ? "confirmed"
             : (statuses[index] as FeedbackStatus),
         copied: statuses[index] === "copied",
       })),
     [students, statuses],
   );
-  const visible = useMemo(
-    () =>
-      entries.filter(
-        ({ student, status, copied }) =>
-          student.name.toLowerCase().includes(search.trim().toLowerCase()) &&
-          (filter === "all" ||
-            (filter === "uncopied"
-              ? status === "confirmed" && !copied
-              : filter === status)),
-      ),
-    [entries, search, filter],
+  const matchingSearch = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query
+      ? entries.filter(({ student }) =>
+          student.name.toLowerCase().includes(query),
+        )
+      : entries;
+  }, [entries, search]);
+  const rosterCounts = useMemo(
+    () => countRosterStatuses(matchingSearch),
+    [matchingSearch],
   );
+  const progressCounts = useMemo(() => {
+    const counts = countRosterStatuses(entries);
+    return {
+      total: entries.length - (counts.inactive ?? 0),
+      done: counts.confirmed ?? 0,
+      processing: counts.processing ?? 0,
+      failed: counts.failed ?? 0,
+    };
+  }, [entries]);
+  const visible = useMemo(
+    () => matchingSearch.filter((entry) => matchesRosterFilter(entry, filter)),
+    [matchingSearch, filter],
+  );
+  const pinned =
+    focusedCard?.lessonId === lessonId && focusedCard.id === preferredId
+      ? matchingSearch.find(({ student }) => student.id === preferredId)
+      : undefined;
   const current =
-    visible.find(({ student }) => student.id === preferredId) ?? visible[0];
+    visible.find(({ student }) => student.id === preferredId) ??
+    pinned ??
+    visible[0];
   const currentId = current?.student.id ?? "";
   const resumeFeedback =
     current &&
@@ -266,8 +216,13 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
           ? "继续记录"
           : "查看学生";
   const currentOffset = current ? visible.indexOf(current) : -1;
-  const compactPage = Math.max(1, Math.floor(currentOffset / pageSize) + 1);
-  const compactEntries = visible.slice(
+  const editorEntries =
+    current && currentOffset < 0
+      ? [...visible, current].sort((a, b) => a.index - b.index)
+      : visible;
+  const editorOffset = current ? editorEntries.indexOf(current) : -1;
+  const compactPage = Math.max(1, Math.floor(editorOffset / pageSize) + 1);
+  const compactEntries = editorEntries.slice(
     (compactPage - 1) * pageSize,
     compactPage * pageSize,
   );
@@ -275,134 +230,49 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
   const clearFilters = useCallback(() => {
     setSearch("");
     setFilter("all");
+    setFocusedCard(undefined);
   }, []);
 
-  const rememberStudent = useCallback((id: string) => {
-    const { lessonId } = useRosterStore.getState();
-    setSelected((previous) =>
-      previous?.id === id && previous.lessonId === lessonId
-        ? previous
-        : { id, lessonId },
-    );
-    try {
-      if (savedStudent(lessonId) !== id)
-        localStorage.setItem(`lessonSelection:${lessonId}`, id);
-    } catch {
-      /* The student can still be selected when browser storage is full. */
-    }
-  }, []);
+  const stepStudent = (direction: -1 | 1) => {
+    const next =
+      currentOffset >= 0
+        ? visible[currentOffset + direction]
+        : direction > 0
+          ? visible[0]
+          : undefined;
+    if (!next?.student.id) return false;
+    setFocusedCard(undefined);
+    navigateStudent(next.student.id);
+    return true;
+  };
 
-  const navigateStudent = useCallback(
-    (id: string, target: FocusTarget = "card") => {
-      rememberStudent(id);
-      setNavigationTarget({
-        id,
-        target,
-        lessonId: useRosterStore.getState().lessonId,
-      });
-    },
-    [rememberStudent],
-  );
+  const openShortcuts = shortcutHelp.show;
+  useWorkbenchShortcuts({
+    workbenchRef,
+    blocked: Boolean(
+      settingsDrawer.overlay ||
+        templateEditor.overlay ||
+        history.overlay ||
+        shortcutHelp.overlay ||
+        openRoster,
+    ),
+    step: stepStudent,
+    showHelp: () => openShortcuts(true),
+  });
+  const swipe = useMobileStudentSwipe(stepStudent);
 
-  useLayoutEffect(() => {
-    if (navigationTarget?.lessonId !== lessonId) return;
-    const card = cards.current.get(navigationTarget.id);
-    if (!card) return;
-    const selector =
-      navigationTarget.target === "feedback"
-        ? "[data-feedback-body]"
-        : "[data-observation]";
-    const target =
-      navigationTarget.target === "card"
-        ? card
-        : (card.querySelector<HTMLElement>(selector) ?? card);
-    target.focus({ preventScroll: true });
-    const workbench = workbenchRef.current;
-    const toolbar = workbench?.querySelector(".workbench-toolbar");
-    const toolbarStyle = toolbar && getComputedStyle(toolbar);
-    const inset =
-      toolbar && toolbarStyle?.position === "sticky"
-        ? toolbar.clientHeight + Number.parseFloat(toolbarStyle.top) + 12
-        : 0;
-    const isCard = navigationTarget.target === "card";
-    const actionBar = isCard ? workbench?.querySelector(".action-bar") : null;
-    const reveal = () => {
-      const rect = target.getBoundingClientRect();
-      const bar = actionBar?.getBoundingClientRect();
-      const visibleBottom =
-        bar && bar.bottom > 0 ? Math.min(innerHeight, bar.top) : innerHeight;
-      if (rect.top >= inset - 1 && rect.bottom <= visibleBottom - 8) return 0;
-      const top = isCard
-        ? inset
-        : Math.max(inset, (innerHeight + inset - rect.height) / 2);
-      const offset = window.scrollY;
-      const page = document.scrollingElement;
-      const end = Math.max(
-        0,
-        (page?.scrollHeight ?? innerHeight) - innerHeight,
-      );
-      const destination = Math.min(end, Math.max(0, offset + rect.top - top));
-      const distance = Math.abs(destination - offset);
-      if (distance <= 1) return 0;
-      window.scrollTo({
-        top: destination,
-        behavior: prefersReducedMotion() ? "instant" : "smooth",
-      });
-      return distance;
-    };
-    const distance = reveal();
-    if (!distance || prefersReducedMotion()) return;
-    const stage =
-      distance >= innerHeight
-        ? card.closest(".editor-stage.compact-grid")
-        : null;
-    stage?.setAttribute("data-navigation-scrolling", "");
-    const controller = new AbortController();
-    let settleTimer: number;
-    let canRetry = Boolean(stage);
-    const cancel = () => {
-      controller.abort();
-      window.clearTimeout(settleTimer);
-      stage?.removeAttribute("data-navigation-scrolling");
-    };
-    // Allow for late geometry updates and browsers without scrollend.
-    const finish = () => {
-      const remaining = target.isConnected ? reveal() : 0;
-      if (canRetry && remaining >= innerHeight && !prefersReducedMotion()) {
-        canRetry = false;
-        scheduleFinish(1200);
-        return;
-      }
-      cancel();
-    };
-    const scheduleFinish = (delay: number) => {
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(finish, delay);
-    };
-    scheduleFinish(1200);
-    if (stage) {
-      window.addEventListener("scroll", () => scheduleFinish(150), {
-        passive: true,
-        signal: controller.signal,
-      });
+  const selectProgress = (next: "processing" | "failed") => {
+    if (filter === next && !search) {
+      clearFilters();
+      return;
     }
-    window.addEventListener("scrollend", finish, {
-      signal: controller.signal,
-    });
-    window
-      .matchMedia("(prefers-reduced-motion: reduce)")
-      .addEventListener("change", finish, {
-        once: true,
-        signal: controller.signal,
-      });
-    for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
-      window.addEventListener(type, cancel, {
-        once: true,
-        passive: true,
-        signal: controller.signal,
-      });
-    return cancel;
-  }, [lessonId, navigationTarget, workbenchRef]);
+    const first = entries.find((entry) => matchesRosterFilter(entry, next));
+    if (!first?.student.id) return;
+    setSearch("");
+    setFilter(next);
+    setFocusedCard(undefined);
+    navigateStudent(first.student.id);
+  };
 
   useEffect(() => {
     void useInputAssistantStore.getState().loadV1Suggestions();
@@ -417,12 +287,11 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
   }, [lessonId]);
 
   const switchClass = (name: string) => {
-    if (!useRosterStore.getState().loadStudentsFromStorage(name)) return;
+    if (!useRosterStore.getState().loadStudentsFromStorage(name)) return false;
     useCourseStore.getState().hydrateCourseState();
-    setClassInput("");
-    setCreatingClass(false);
     setCourseFocus(null);
     clearFilters();
+    return true;
   };
   const fixIssue = useCallback(
     (issue: GenerationIssue) => {
@@ -499,7 +368,7 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
           ? "本次反馈已全部确认。"
           : "暂时没有其他待校对的反馈。",
       );
-      if (pendingCopy())
+      if (pendingFeedbackCopyIds().length)
         requestAnimationFrame(() =>
           document.querySelector<HTMLElement>("[data-copy-next]")?.focus(),
         );
@@ -516,141 +385,25 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
     [nextStudent],
   );
 
-  const showPreview = useCallback(
-    (studentId?: string, sequential = false) => {
-      const { activeClass, course, studentsList, studentsInfo, lessonId } =
-        useRosterStore.getState();
-      const issue = getCourseIssues(course)[0];
-      const context = lessonCourseContext(activeClass, course);
-      if (issue || !context) {
-        if (issue) {
-          sendWarning(`预览前请先${issue.message}。`);
-          fixIssue({ ...issue, section: "course" });
-        }
-        return;
-      }
-      const { customTemplate, signature } = useFeedbackStore.getState();
-      const templateIssue = getFeedbackTemplateIssues(customTemplate)[0];
-      if (templateIssue) {
-        sendWarning(templateIssue);
-        showTemplate(true);
-        return;
-      }
-      const input = { courseContext: context, customTemplate, signature };
-      if (studentId) {
-        const index = studentsList.findIndex(
-          (student) => student.id === studentId,
-        );
-        const info = studentsInfo[index];
-        if (!isFeedbackReviewable(info)) return;
-        const student = studentsList[index];
-        setPreview({
-          markdown: buildStudentFeedbackMarkdown({
-            ...input,
-            student,
-            studentInfo: info,
-          }),
-          detail: student.name,
-          lessonId,
-          studentIds: [studentId],
-          singleId: studentId,
-          sequential,
-        });
-        return;
-      }
-      const studentIds = studentsList
-        .filter((_, index) => isFeedbackConfirmed(studentsInfo[index]))
-        .map((student) => student.id!);
-      if (!studentIds.length) return;
-      setPreview({
-        markdown: buildFeedbackBatchMarkdown({
-          ...input,
-          students: studentsList,
-          studentsInfo,
-          onlyReadyAndActivated: true,
-          onlyConfirmed: true,
-        }),
-        detail: `${studentIds.length} 份已确认反馈`,
-        lessonId,
-        studentIds,
-      });
-    },
-    [fixIssue, sendWarning, setPreview, showTemplate],
-  );
+  const copyFlow = useFeedbackCopyFlow({
+    sendMessage,
+    sendWarning,
+    fixIssue,
+    openTemplate: openFeedbackTemplate,
+  });
+  const previewDialog = copyFlow.dialog;
+  const preview = previewDialog.overlay?.content;
 
   const previewArchivedStudent = (draft: LessonDraft, index: number) => {
-    const student = draft.studentsList[index];
-    const info = draft.studentsInfo[index];
-    const context = lessonCourseContext(draft.activeClass, draft.course);
-    const { customTemplate, signature } = feedback;
-    const templateIssue =
-      context && getFeedbackTemplateIssues(customTemplate)[0];
-    if (templateIssue) {
-      sendWarning(templateIssue);
-      templateAfterHistory.current = true;
-      history.close();
-      return;
-    }
-    setPreview({
-      markdown: context
-        ? buildStudentFeedbackMarkdown({
-            courseContext: context,
-            student,
-            studentInfo: info,
-            customTemplate,
-            signature,
-          })
-        : `### ${student.name}\n${info.content}`,
-      detail: `${student.name} · ${draft.course.name || "未命名课程"}`,
-      studentIds: [],
-    });
-  };
-
-  const copied = (advance: boolean) => {
-    if (!preview) return;
-    const state = useRosterStore.getState();
-    if (state.lessonId === preview.lessonId) {
-      const copiedAt = new Date().toISOString();
-      preview.studentIds.forEach((id) => {
-        const index = state.studentsList.findIndex(
-          (student) => student.id === id,
-        );
-        if (index >= 0 && isFeedbackReviewable(state.studentsInfo[index]))
-          state.updateStudentInfo(index, { copiedAt });
-      });
-    }
-    sendMessage("已复制反馈。");
-    if (!advance) return;
-    const target = pendingCopy(preview.singleId);
-    if (target) showPreview(target, true);
-    else previewDialog.close();
+    if (copyFlow.showArchived(draft, index)) return;
+    templateAfterHistory.current = true;
+    history.close();
   };
 
   const afterLessonChange = () => {
     setCourseFocus(null);
     clearFilters();
   };
-
-  const newClassControls = (
-    <Flex gap={8} className="new-class-controls">
-      <Input
-        aria-label="新班级名称"
-        value={classInput}
-        onChange={(event) => setClassInput(event.target.value)}
-        placeholder="新班级名称"
-        autoFocus={Boolean(activeClass)}
-        onPressEnter={() => classInput.trim() && switchClass(classInput)}
-      />
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        disabled={!classInput.trim()}
-        onClick={() => switchClass(classInput)}
-      >
-        创建班级
-      </Button>
-    </Flex>
-  );
 
   const editor = (student: StudentBasicInfo, isCompact: boolean) => {
     const id = student.id!;
@@ -666,7 +419,25 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
           if (node) cards.current.set(id, node);
           else cards.current.delete(id);
         }}
-        onFocusCapture={() => rememberStudent(id)}
+        onFocusCapture={() => {
+          rememberStudent(id);
+          setFocusedCard((previous) =>
+            previous?.id === id && previous.lessonId === lessonId
+              ? previous
+              : { id, lessonId },
+          );
+        }}
+        onBlurCapture={(event) => {
+          if (
+            event.relatedTarget instanceof Node &&
+            event.currentTarget.contains(event.relatedTarget)
+          )
+            return;
+          setFocusedCard((previous) =>
+            previous?.id === id ? undefined : previous,
+          );
+        }}
+        {...(isCompact ? {} : swipe)}
       >
         <div className="editor-backplate" aria-hidden="true" />
         <ViewportEditor
@@ -677,10 +448,13 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
         >
           <StudentEditor
             id={id}
+            selected={id === currentId}
             issue={issues[0]?.message}
             onGenerate={generate}
             onFixIssue={fixFirstIssue}
-            onPreview={showPreview}
+            compact={isCompact}
+            onPreview={copyFlow.showPreview}
+            onCopy={copyFlow.copyStudent}
             onRecordNext={recordNext}
             onReviewNext={reviewNext}
             onConfirmed={onConfirmed}
@@ -691,295 +465,242 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
   };
 
   return (
-    <div className="workspace">
-      <div className="workspace-heading">
-        <h1 key={activeClass}>{activeClass || "开始本次课的反馈"}</h1>
-        <Flex gap={8} wrap>
-          <Dropdown
-            trigger={["click"]}
-            menu={{
-              selectedKeys: [appearance.mode],
-              items: [
-                { key: "system", label: "跟随系统", icon: <DesktopOutlined /> },
-                { key: "light", label: "浅色模式", icon: <SunOutlined /> },
-                { key: "dark", label: "暗色模式", icon: <MoonOutlined /> },
-              ],
-              onClick: ({ key }) =>
-                appearance.setMode(key as "system" | "light" | "dark"),
-            }}
-          >
-            <IconButton
-              label="切换外观"
-              icon={
-                <span key={appearance.mode} className="appearance-icon">
-                  {appearance.mode === "system" ? (
-                    <DesktopOutlined />
-                  ) : appearance.mode === "dark" ? (
-                    <MoonOutlined />
-                  ) : (
-                    <SunOutlined />
-                  )}
-                </span>
-              }
-            />
-          </Dropdown>
-          <Button icon={<EditOutlined />} onClick={() => showTemplate(true)}>
-            反馈模板
-          </Button>
-          <IconButton
-            label="设置"
-            icon={<SettingOutlined />}
-            onClick={() => showSettings({})}
-          />
-        </Flex>
-      </div>
-      <div className={activeClass ? "class-bar active-class-bar" : "class-bar"}>
-        {(activeClass || classes.length > 0) && (
-          <Select
-            aria-label="切换班级"
-            value={activeClass || undefined}
-            placeholder="选择班级"
-            onChange={switchClass}
-            options={Array.from(
-              new Set([...classes, activeClass].filter(Boolean)),
-            ).map((value) => ({ value, label: value }))}
-          />
-        )}
-        {!activeClass && newClassControls}
-        {activeClass && (
-          <Flex className="lesson-actions" gap={8}>
-            <Popconfirm
-              title="保存本次记录并开始新一课？"
-              description="学生名单保留，新课从空白的课堂记录开始。"
-              onConfirm={() => {
-                if (useRosterStore.getState().newLesson()) afterLessonChange();
-              }}
-            >
-              <Button icon={<CalendarOutlined />}>开始新课</Button>
-            </Popconfirm>
-            <Button
-              icon={<HistoryOutlined />}
-              onClick={() => {
-                templateAfterHistory.current = false;
-                history.show({
-                  current: getCurrentLessonDraft(),
-                  records: readArchivedLessons(activeClass),
-                });
-              }}
-            >
-              历史课次
-            </Button>
-          </Flex>
-        )}
-        {activeClass && (
-          <Popover
-            trigger="click"
-            placement="bottomLeft"
-            open={creatingClass}
-            onOpenChange={setCreatingClass}
-            content={newClassControls}
-          >
-            <IconButton
-              className="new-class-trigger"
-              label="新建班级"
-              tooltipClassName="new-class-tooltip"
-              icon={<PlusOutlined />}
-            >
-              <span>新建班级</span>
-            </IconButton>
-          </Popover>
-        )}
-      </div>
-      <SaveStatus
-        onLoadLatest={() => {
-          cancelGeneration();
-          if (loadLatestLessonDraft()) afterLessonChange();
+    <>
+      <WorkspaceHeader
+        activeClass={activeClass}
+        classes={classes}
+        onSwitchClass={switchClass}
+        onStartLesson={() => {
+          if (useRosterStore.getState().newLesson()) afterLessonChange();
         }}
+        onHistory={() => {
+          templateAfterHistory.current = false;
+          history.show({
+            current: getCurrentLessonDraft(),
+            records: readArchivedLessons(activeClass),
+          });
+        }}
+        onTemplate={openFeedbackTemplate}
+        onSettings={() => showSettings({})}
       />
-      <LessonSurface lesson={activeClass ? lessonId : ""}>
-        {!activeClass ? (
-          <div className="welcome-panel">
-            <Empty description="创建班级后即可添加学生名单。" />
-          </div>
-        ) : (
-          <CoursePanel key={lessonId} focusRequest={courseFocus} />
-        )}
-      </LessonSurface>
-      {activeClass &&
-        (students.length > 0 ? (
-          <>
-            <div className="workbench" ref={workbenchRef} key={activeClass}>
-              <span className="workbench-threshold" aria-hidden="true" />
-              <div className="workbench-toolbar">
-                <div className="view-toolbar">
-                  <Segmented
-                    aria-label="编辑布局"
-                    value={compact ? "compact" : "single"}
-                    options={[
-                      { value: "single", label: "逐人编辑", title: "" },
-                      { value: "compact", label: "多人编辑", title: "" },
-                    ]}
-                    onChange={(value) => {
-                      setCompact(value === "compact");
+      <main
+        className="page-content"
+        aria-label={activeClass || "课程反馈工作台"}
+      >
+        <div className="workspace">
+          {activeClass && <h1 className="visually-hidden">{activeClass}</h1>}
+          <SaveStatus
+            onLoadLatest={() => {
+              cancelGeneration();
+              if (loadLatestLessonDraft()) afterLessonChange();
+            }}
+          />
+          <LessonSurface lesson={activeClass ? lessonId : ""}>
+            {!activeClass ? (
+              <div className="welcome-panel">
+                <h1>开始本次课的反馈</h1>
+                <Empty description="创建班级后即可添加学生名单。">
+                  <CreateClassForm onCreate={switchClass} />
+                </Empty>
+              </div>
+            ) : (
+              <CoursePanel key={lessonId} focusRequest={courseFocus} />
+            )}
+          </LessonSurface>
+          {activeClass &&
+            (students.length > 0 ? (
+              <>
+                <div className="workbench" ref={workbenchRef} key={activeClass}>
+                  <span className="workbench-threshold" aria-hidden="true" />
+                  <WorkbenchToolbar
+                    compact={compact}
+                    setCompact={(value) => {
+                      setCompact(value);
                       try {
-                        localStorage.setItem("editorMode", value);
+                        localStorage.setItem(
+                          "editorMode",
+                          value ? "compact" : "single",
+                        );
                       } catch {
                         /* Layout still changes in this session. */
                       }
                     }}
-                  />
-                  <span hidden={!compact}>
-                    <Select
-                      aria-label="每页人数"
-                      value={pageSize}
-                      options={pageSizeChoices}
-                      onChange={setPageSize}
-                    />
-                  </span>
-                  {currentId && (
-                    <Button
-                      className="resume-student"
-                      onClick={() =>
-                        navigateStudent(
-                          currentId,
-                          resumeFeedback
-                            ? "feedback"
-                            : resumeLabel === "继续记录"
-                              ? "observation"
-                              : "card",
-                        )
-                      }
-                    >
-                      {resumeLabel} {current.student.name}
-                    </Button>
-                  )}
-                </div>
-                <ProgressBar
-                  confirmation={
-                    confirmation?.lessonId === lessonId
-                      ? confirmation
-                      : undefined
-                  }
-                />
-              </div>
-              <aside className="roster-panel">
-                <div className="roster-panel-content">
-                  <Flex
-                    justify="space-between"
-                    align="center"
-                    className="roster-heading"
-                  >
-                    <h2>
-                      学生 <span>{students.length}</span>
-                    </h2>
-                    <Flex gap={4}>
-                      <IconButton
-                        type="text"
-                        icon={<SortAscendingOutlined />}
-                        label="按姓名排序"
-                        onClick={useRosterStore.getState().sortStudentsByName}
-                      />
-                      <IconButton
-                        type="text"
-                        label="管理名单"
-                        icon={<TeamOutlined />}
-                        onClick={() => setOpenRoster(true)}
-                      />
-                    </Flex>
-                  </Flex>
-                  <Roster
-                    entries={visible}
-                    selected={currentId}
-                    onSelect={navigateStudent}
-                    filter={filter}
-                    setFilter={setFilter}
-                    search={search}
-                    setSearch={setSearch}
-                  />
-                  <Button
-                    className="invert-participation"
-                    type="text"
-                    onClick={() =>
-                      useRosterStore.getState().toggleAllStudentsActivation()
+                    pageSize={pageSize}
+                    setPageSize={setPageSize}
+                    resumeLabel={
+                      current
+                        ? `${resumeLabel} ${current.student.name}`
+                        : undefined
                     }
-                  >
-                    反转参与选择
-                  </Button>
-                </div>
-              </aside>
-              <div className="editor-area">
-                <EditorStage
-                  key={lessonId}
-                  compact={compact && Boolean(currentId)}
-                  cursor={current?.index ?? -1}
-                  navigation={navigationTarget}
-                  neighbors={
-                    compact
-                      ? []
-                      : [visible[currentOffset + 1], visible[currentOffset - 1]]
-                          .filter(Boolean)
-                          .map(({ student }) => editor(student, false))
-                  }
-                  revision={JSON.stringify([
-                    compact,
-                    ...displayed.map(({ student }) => student.id),
-                  ])}
-                  cards={
-                    currentId
-                      ? displayed.map(({ student }) => editor(student, compact))
-                      : [
-                          <div
-                            key="empty"
-                            data-current-editor="true"
-                            className="editor-empty"
-                          >
-                            <Empty description="没有符合条件的学生">
-                              <Button onClick={clearFilters}>清除筛选</Button>
-                            </Empty>
-                          </div>,
-                        ]
-                  }
-                />
-                {visible.length > pageSize && (
-                  <div hidden={!compact}>
-                    <Pagination
-                      current={compactPage}
-                      pageSize={pageSize}
-                      total={visible.length}
-                      showSizeChanger={paginationSizeChanger}
-                      pageSizeOptions={pageSizes}
-                      onChange={(page, size) => {
-                        const id =
-                          visible[(page - 1) * size]?.student.id ?? currentId;
-                        setPageSize(size);
-                        navigateStudent(id);
-                      }}
+                    onResume={() =>
+                      navigateStudent(
+                        currentId,
+                        resumeFeedback
+                          ? "feedback"
+                          : resumeLabel === "继续记录"
+                            ? "observation"
+                            : "card",
+                      )
+                    }
+                    confirmation={
+                      confirmation?.lessonId === lessonId
+                        ? confirmation
+                        : undefined
+                    }
+                    counts={progressCounts}
+                    filter={filter}
+                    onFilter={selectProgress}
+                    onShowHelp={() => openShortcuts(true)}
+                  />
+                  <aside className="roster-panel">
+                    <div className="roster-panel-content">
+                      <Flex
+                        justify="space-between"
+                        align="center"
+                        className="roster-heading"
+                      >
+                        <h2>
+                          学生 <span>{students.length}</span>
+                        </h2>
+                        <Flex gap={4}>
+                          <IconButton
+                            type="text"
+                            icon={<SortAscendingOutlined />}
+                            label="按姓名排序"
+                            onClick={
+                              useRosterStore.getState().sortStudentsByName
+                            }
+                          />
+                          <IconButton
+                            type="text"
+                            label="管理名单"
+                            icon={<TeamOutlined />}
+                            onClick={() => setOpenRoster(true)}
+                          />
+                        </Flex>
+                      </Flex>
+                      <Roster
+                        entries={visible}
+                        selected={currentId}
+                        onSelect={navigateStudent}
+                        filter={filter}
+                        setFilter={(next) => {
+                          setFocusedCard(undefined);
+                          setFilter(next);
+                        }}
+                        counts={rosterCounts}
+                        search={search}
+                        setSearch={(query) => {
+                          setFocusedCard(undefined);
+                          setSearch(query);
+                        }}
+                      />
+                      <Button
+                        className="invert-participation"
+                        type="text"
+                        onClick={() =>
+                          useRosterStore
+                            .getState()
+                            .toggleAllStudentsActivation()
+                        }
+                      >
+                        反转参与选择
+                      </Button>
+                    </div>
+                  </aside>
+                  <div className="editor-area">
+                    {current && !compact && (
+                      <MobileStudentNavigation
+                        name={current.student.name}
+                        position={currentOffset}
+                        total={visible.length}
+                        step={stepStudent}
+                      />
+                    )}
+                    <EditorStage
+                      key={lessonId}
+                      compact={compact && Boolean(currentId)}
+                      cursor={current?.index ?? -1}
+                      navigation={navigationTarget}
+                      neighbors={
+                        compact
+                          ? []
+                          : [
+                              visible[currentOffset + 1],
+                              visible[currentOffset - 1],
+                            ]
+                              .filter(Boolean)
+                              .map(({ student }) => editor(student, false))
+                      }
+                      revision={JSON.stringify([
+                        compact,
+                        ...displayed.map(({ student }) => student.id),
+                      ])}
+                      cards={
+                        currentId
+                          ? displayed.map(({ student }) =>
+                              editor(student, compact),
+                            )
+                          : [
+                              <div
+                                key="empty"
+                                data-current-editor="true"
+                                className="editor-empty"
+                              >
+                                <Empty description="没有符合条件的学生">
+                                  <Button onClick={clearFilters}>
+                                    清除筛选
+                                  </Button>
+                                </Empty>
+                              </div>,
+                            ]
+                      }
                     />
+                    {editorEntries.length > pageSize && (
+                      <div hidden={!compact}>
+                        <WorkbenchPagination
+                          page={compactPage}
+                          pageSize={pageSize}
+                          total={editorEntries.length}
+                          onChange={(page, size) => {
+                            const id =
+                              editorEntries[(page - 1) * size]?.student.id ??
+                              currentId;
+                            setPageSize(size);
+                            navigateStudent(id);
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
+                  <BatchActions
+                    key={lessonId}
+                    issues={issues}
+                    onFix={fixIssue}
+                    onGenerate={(failedOnly) => generate(undefined, failedOnly)}
+                    onCopy={() => copyFlow.showPreview()}
+                    onCopyNext={copyFlow.startQueue}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="welcome-panel">
+                <Empty description="添加学生后，开始记录课堂表现">
+                  <Button type="primary" onClick={() => setOpenRoster(true)}>
+                    添加学生
+                  </Button>
+                </Empty>
               </div>
-              <BatchActions
-                key={lessonId}
-                issues={issues}
-                onFix={fixIssue}
-                onGenerate={(failedOnly) => generate(undefined, failedOnly)}
-                onCopy={() => showPreview()}
-                onCopyNext={() => {
-                  const next = pendingCopy();
-                  if (next) showPreview(next, true);
-                }}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="welcome-panel">
-            <Empty description="添加学生后，开始记录课堂表现">
-              <Button type="primary" onClick={() => setOpenRoster(true)}>
-                添加学生
-              </Button>
-            </Empty>
-          </div>
-        ))}
+            ))}
+        </div>
+      </main>
+      {shortcutHelp.overlay && (
+        <WorkbenchShortcutHelp
+          open={shortcutHelp.overlay.open}
+          onClose={shortcutHelp.close}
+          afterClose={shortcutHelp.afterClose}
+        />
+      )}
       {history.overlay && (
         <LessonHistory
           open={history.overlay.open}
@@ -1027,17 +748,21 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
           markdown={preview.markdown}
           detail={preview.detail}
           contentKey={preview.singleId ?? preview.detail}
-          format={format}
-          setFormat={setFormat}
-          continuation={
-            preview.singleId && pendingCopy(preview.singleId)
-              ? "next"
-              : preview.sequential
-                ? "finish"
-                : undefined
+          format={copyFlow.format}
+          setFormat={copyFlow.setFormat}
+          queue={
+            preview.queue
+              ? {
+                  index: preview.queue.index,
+                  total: preview.queue.ids.length,
+                  direction: preview.queue.direction,
+                }
+              : undefined
           }
+          onPrevious={() => copyFlow.moveQueue(preview, "backward")}
+          onSkip={() => copyFlow.moveQueue(preview, "forward")}
           onClose={previewDialog.close}
-          onCopied={copied}
+          onCopy={copyFlow.copyPreview}
           onCopyError={() => sendWarning("已选中预览内容，可以手动复制。")}
         />
       )}
@@ -1085,6 +810,6 @@ export default function MainUI({ sendMessage, sendWarning }: Props) {
           />
         </Suspense>
       )}
-    </div>
+    </>
   );
 }

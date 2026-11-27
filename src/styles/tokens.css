@@ -1,0 +1,59 @@
+:root {
+  --page-gutter: clamp(16px, 4vw, 64px);
+  --workspace-width: 1500px;
+  --surface: var(--surface-panel, Canvas);
+  --primary: var(--tone-primary, Highlight);
+  --selected: color-mix(in srgb, var(--tone-primary) 11%, var(--surface-panel));
+  --row-hover: color-mix(in srgb, var(--tone-primary) 7%, var(--surface-panel));
+  --rc-virtual-list-scrollbar-bg: var(--scroll-thumb);
+  --radius-tag: 4px;
+  --motion-fast: 150ms;
+  --motion-base: 280ms;
+  --motion-travel: 360ms;
+  --motion-exit: 160ms;
+  --motion-settle: cubic-bezier(0.18, 0.78, 0.22, 1);
+  --motion-spring: cubic-bezier(0.2, 0.9, 0.25, 1.1);
+  --motion-release: cubic-bezier(0.4, 0, 0.72, 0.42);
+}
+
+:root {
+  --shadow-ink: 24 44 70;
+  --shadow-strength: 1;
+  --shadow-level-1:
+    0 1px 1px rgb(var(--shadow-ink) / calc(0.07 * var(--shadow-strength))),
+    0 2px 3px -1px rgb(var(--shadow-ink) / calc(0.08 * var(--shadow-strength))),
+    0 4px 8px -5px rgb(var(--shadow-ink) / calc(0.13 * var(--shadow-strength)));
+  --shadow-level-2:
+    0 1px 2px rgb(var(--shadow-ink) / calc(0.08 * var(--shadow-strength))),
+    0 4px 9px -4px rgb(var(--shadow-ink) / calc(0.11 * var(--shadow-strength))),
+    0 10px 24px -14px
+      rgb(var(--shadow-ink) / calc(0.18 * var(--shadow-strength)));
+  --shadow-level-3:
+    0 1px 3px rgb(var(--shadow-ink) / calc(0.09 * var(--shadow-strength))),
+    0 6px 14px -5px rgb(var(--shadow-ink) / calc(0.14 * var(--shadow-strength))),
+    0 16px 36px -18px
+      rgb(var(--shadow-ink) / calc(0.23 * var(--shadow-strength)));
+  --shadow-level-4:
+    0 1px 3px rgb(var(--shadow-ink) / calc(0.1 * var(--shadow-strength))),
+    0 8px 20px -6px rgb(var(--shadow-ink) / calc(0.17 * var(--shadow-strength))),
+    0 23px 48px -20px
+      rgb(var(--shadow-ink) / calc(0.26 * var(--shadow-strength)));
+  --shadow-level-5:
+    0 2px 4px rgb(var(--shadow-ink) / calc(0.12 * var(--shadow-strength))),
+    0 10px 26px -6px
+      rgb(var(--shadow-ink) / calc(0.21 * var(--shadow-strength))),
+    0 29px 66px -20px
+      rgb(var(--shadow-ink) / calc(0.3 * var(--shadow-strength)));
+  --shadow-control: var(--shadow-level-1);
+  --shadow-surface: var(--shadow-level-2);
+  --shadow-dock: var(--shadow-level-3);
+  --shadow-floating: var(--shadow-level-4);
+  --shadow-dialog: var(--shadow-level-5);
+  --radius-surface: 16px;
+  --radius-control: 8px;
+  --radius-inset: 6px;
+}
+:root[data-theme="dark"] {
+  --shadow-ink: 0 0 0;
+  --shadow-strength: 2.35;
+}

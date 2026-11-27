@@ -133,9 +133,6 @@
       border-radius: var(--radius-surface);
       corner-shape: squircle;
     }
-    .workbench[data-docked] .workbench-toolbar {
-      background: transparent;
-    }
   }
   :is(
     .ant-card,

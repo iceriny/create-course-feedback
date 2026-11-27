@@ -1,5 +1,3 @@
-@layer reset, tokens, base, antd, components, motion;
-
 @import "./styles/tokens.css" layer(tokens);
 @import "./styles/layout.css";
 @import "./styles/workbench.css" layer(components);

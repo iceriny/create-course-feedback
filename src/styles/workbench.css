@@ -65,6 +65,11 @@
   padding-block: 8px;
   background: var(--surface-canvas);
 }
+@media (min-width: 701px) {
+  .workbench[data-docked] .workbench-toolbar {
+    background: transparent;
+  }
+}
 .roster-panel {
   align-self: start;
   max-block-size: var(--roster-space);

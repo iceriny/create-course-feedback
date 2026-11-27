@@ -4,10 +4,8 @@
     @media (prefers-color-scheme: dark) {
       #crossbar { fill: #E7EDE9; }
     }
-    @media (prefers-reduced-motion: no-preference) {
-      #crossbar { animation: write 2s ease-in-out infinite; }
-      #loop { transform-origin: 24px 37px; animation: lean 2s ease-in-out infinite; }
-    }
+    #crossbar { animation: write 2s ease-in-out infinite; }
+    #loop { transform-origin: 24px 37px; animation: lean 2s ease-in-out infinite; }
     @keyframes write {
       0%, 18%, 82%, 100% { clip-path: inset(0); }
       42% { clip-path: inset(0 0 0 100%); }

@@ -43,6 +43,9 @@
       .startup-mark img {
         display: block;
       }
+      :root[data-motion="full"] .startup-screen:not([data-failed]) .startup-mark img {
+        content: url("/loading-logo.svg");
+      }
       .startup-screen h1 {
         margin: 0;
         font-size: 22px;
@@ -74,25 +77,13 @@
         }
       } catch {}
     </script>
-    <script type="module" crossorigin src="/assets/index-DTE1sowJ.js"></script>
+    <script type="module" crossorigin src="/assets/index-BlMqjRJf.js"></script>
   </head>
   <body>
     <div id="root">
       <div id="startup-screen" class="startup-screen">
         <div class="startup-mark">
-          <picture>
-            <source
-              media="(prefers-reduced-motion: reduce)"
-              srcset="/logo.svg"
-            />
-            <img
-              id="startup-logo"
-              src="/loading-logo.svg"
-              width="48"
-              height="48"
-              alt=""
-            />
-          </picture>
+          <img src="/logo.svg" width="48" height="48" alt="" />
         </div>
         <h1>课程反馈生成器</h1>
         <p class="startup-status" role="status">正在加载工作台</p>
